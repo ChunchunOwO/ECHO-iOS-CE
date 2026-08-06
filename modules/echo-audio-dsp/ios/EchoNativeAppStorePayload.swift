@@ -7,14 +7,6 @@ extension EchoNativeAppStore {
     playerModel.connectionOnline = connectionStatus.online
     playerModel.artworkBackgroundEnabled = persistent.settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = persistent.settings.darkModeEnabled
-    playerModel.desktopLyricsAnimation = persistent.settings.desktopLyricsAnimation
-    playerModel.desktopLyricsEnabled = persistent.settings.desktopLyricsEnabled
-    playerModel.desktopLyricsOpacity = persistent.settings.desktopLyricsOpacity
-    playerModel.desktopLyricsOnlyWhilePlaying = persistent.settings.desktopLyricsOnlyWhilePlaying
-    playerModel.desktopLyricsPosition = persistent.settings.desktopLyricsPosition
-    playerModel.desktopLyricsShowMetadata = persistent.settings.desktopLyricsShowMetadata
-    playerModel.desktopLyricsSize = persistent.settings.desktopLyricsSize
-    playerModel.desktopLyricsStyle = persistent.settings.desktopLyricsStyle
     playerModel.followSystemAppearance = persistent.settings.followSystemAppearance
     playerModel.language = persistent.settings.language
     playerModel.playbackMode = persistent.settings.playbackMode
@@ -690,7 +682,7 @@ extension EchoNativeAppStore {
       || (settings.defaultLibrarySource == "remote" && !persistent.powerampConnection.enabled)
     let defaultLibrarySource = defaultSourceUnavailable ? "local" : settings.defaultLibrarySource
     let desktopLyricsSection = section("desktopLyrics", localized("Desktop lyrics", "桌面歌词"), localized("A native floating lyric layer with motion and style controls.", "原生浮动歌词层，可自定义动态效果与显示样式。"), "quote.bubble.fill", [
-      toggle("desktopLyricsEnabled", localized("Enable desktop lyrics", "启用桌面歌词"), localized("Show the current lyric above every app page.", "在应用页面上方显示当前歌词。"), settings.desktopLyricsEnabled),
+      toggle("desktopLyricsEnabled", localized("Enable desktop lyrics", "启用桌面歌词"), localized("Show lyrics in a floating Picture in Picture window over other apps.", "通过悬浮的画中画窗口在其他应用上方显示歌词。"), settings.desktopLyricsEnabled),
       toggle("desktopLyricsOnlyWhilePlaying", localized("Only while playing", "仅播放时显示"), localized("Hide the overlay when playback is paused.", "暂停播放时隐藏浮层。"), settings.desktopLyricsOnlyWhilePlaying, disabled: !settings.desktopLyricsEnabled),
       toggle("desktopLyricsShowMetadata", localized("Show track details", "显示歌曲信息"), localized("Include title and artist above the lyric.", "在歌词上方显示标题和艺术家。"), settings.desktopLyricsShowMetadata, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsStyle", localized("Surface style", "表面样式"), localized("Choose the visual treatment of the floating layer.", "选择浮层的视觉样式。"), settings.desktopLyricsStyle, [
@@ -702,10 +694,10 @@ extension EchoNativeAppStore {
       picker("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsSize, [
         option("small", localized("Small", "小")), option("medium", localized("Medium", "中")), option("large", localized("Large", "大")),
       ], disabled: !settings.desktopLyricsEnabled),
-      picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place the overlay at the top, center, or bottom.", "将浮层放在顶部、中央或底部。"), settings.desktopLyricsPosition, [
+      picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place lyrics at the top, center, or bottom of the Picture in Picture window.", "将歌词放在画中画窗口的顶部、中央或底部。"), settings.desktopLyricsPosition, [
         option("top", localized("Top", "顶部")), option("center", localized("Center", "居中")), option("bottom", localized("Bottom", "底部")),
       ], disabled: !settings.desktopLyricsEnabled),
-      picker("desktopLyricsOpacity", localized("Background opacity", "背景透明度"), localized("Control how much of the artwork remains visible behind it.", "控制浮层背景的透明程度。"), settings.desktopLyricsOpacity, [
+      picker("desktopLyricsOpacity", localized("Background opacity", "背景透明度"), localized("Control the Picture in Picture background opacity.", "控制画中画窗口背景的透明程度。"), settings.desktopLyricsOpacity, [
         option("low", localized("Low", "低")), option("medium", localized("Medium", "中")), option("high", localized("High", "高")),
       ], disabled: !settings.desktopLyricsEnabled),
     ])

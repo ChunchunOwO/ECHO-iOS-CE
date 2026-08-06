@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('the app boots the native core and keeps playback mutations ordered', async () => {
-  const [app, engine, store, payload, coreTypes, metadata, pages, player, remoteClients, neteaseLogin, localLibrary] = await Promise.all([
+  const [app, engine, store, payload, coreTypes, metadata, pages, player, desktopLyrics, remoteClients, neteaseLogin, localLibrary] = await Promise.all([
     readFile(new URL('../../App.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoAudioDspModule.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeAppStore.swift', import.meta.url), 'utf8'),
@@ -12,6 +12,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeMetadataService.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativePagesView.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativePlayerView.swift', import.meta.url), 'utf8'),
+    readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeDesktopLyrics.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeRemoteClients.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNeteaseLoginView.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeLocalLibrary.swift', import.meta.url), 'utf8'),
@@ -186,9 +187,13 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(player, /hostingController\.overrideUserInterfaceStyle = style/u);
   assert.match(player, /@Published var lyricLines:/u);
   assert.match(player, /ForEach\(Array\(model\.lyricLines\.enumerated\(\)\), id: \\.offset\)/u);
-  assert.match(player, /struct EchoNativeDesktopLyricsOverlay: View/u);
-  assert.match(player, /model\.desktopLyricsPosition/u);
-  assert.match(player, /ultraThinMaterial/u);
+  assert.doesNotMatch(player, /EchoNativeDesktopLyricsOverlay/u);
+  assert.match(desktopLyrics, /AVPictureInPictureController/u);
+  assert.match(desktopLyrics, /AVSampleBufferDisplayLayer/u);
+  assert.match(desktopLyrics, /CVPixelBufferCreate/u);
+  assert.match(desktopLyrics, /didTransitionToRenderSize/u);
+  assert.match(store, /desktopLyricsController\.configure/u);
+  assert.match(store, /desktopLyricsController\.update/u);
   assert.doesNotMatch(player, /@Published var lyricTexts:/u);
   assert.doesNotMatch(player, /model\.repeatOne/u);
   assert.equal((player.match(/themedTab\(playerBackground: true\)/gu) ?? []).length, 2);
