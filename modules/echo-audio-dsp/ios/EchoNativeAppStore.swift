@@ -435,6 +435,14 @@ final class EchoNativeAppStore {
     playerModel.activePage = settings.defaultPage
     playerModel.artworkBackgroundEnabled = settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = settings.darkModeEnabled
+    playerModel.desktopLyricsAnimation = settings.desktopLyricsAnimation
+    playerModel.desktopLyricsEnabled = settings.desktopLyricsEnabled
+    playerModel.desktopLyricsOpacity = settings.desktopLyricsOpacity
+    playerModel.desktopLyricsOnlyWhilePlaying = settings.desktopLyricsOnlyWhilePlaying
+    playerModel.desktopLyricsPosition = settings.desktopLyricsPosition
+    playerModel.desktopLyricsShowMetadata = settings.desktopLyricsShowMetadata
+    playerModel.desktopLyricsSize = settings.desktopLyricsSize
+    playerModel.desktopLyricsStyle = settings.desktopLyricsStyle
     playerModel.followSystemAppearance = settings.followSystemAppearance
     playerModel.language = settings.language
     playerModel.playbackMode = settings.playbackMode
@@ -1887,6 +1895,9 @@ final class EchoNativeAppStore {
     case "followSystemAppearance": persistent.settings.followSystemAppearance = enabled; playerModel.followSystemAppearance = enabled
     case "loudness": persistent.settings.loudnessEnabled = enabled; playerModel.loudnessEnabled = enabled; audioEngine.setLoudness(enabled)
     case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = enabled
+    case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled; playerModel.desktopLyricsEnabled = enabled
+    case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = enabled; playerModel.desktopLyricsOnlyWhilePlaying = enabled
+    case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = enabled; playerModel.desktopLyricsShowMetadata = enabled
     case "autoQueueImports": persistent.settings.autoQueueImportedLocalTracks = enabled
     case "confirmDelete": persistent.settings.confirmBeforeDeletingLocalTracks = enabled
     case "artworkGlow": persistent.settings.showArtworkGlow = enabled; playerModel.showArtworkGlow = enabled
@@ -1932,6 +1943,11 @@ final class EchoNativeAppStore {
       if selection == "direct" { persistent.settings.neteaseApiBaseUrl = "https://music.163.com" }
       configureClients()
     case "manualAppearance": persistent.settings.darkModeEnabled = selection == "dark"; playerModel.darkModeEnabled = selection == "dark"
+    case "desktopLyricsAnimation": persistent.settings.desktopLyricsAnimation = selection; playerModel.desktopLyricsAnimation = selection
+    case "desktopLyricsOpacity": persistent.settings.desktopLyricsOpacity = selection; playerModel.desktopLyricsOpacity = selection
+    case "desktopLyricsPosition": persistent.settings.desktopLyricsPosition = selection; playerModel.desktopLyricsPosition = selection
+    case "desktopLyricsSize": persistent.settings.desktopLyricsSize = selection; playerModel.desktopLyricsSize = selection
+    case "desktopLyricsStyle": persistent.settings.desktopLyricsStyle = selection; playerModel.desktopLyricsStyle = selection
     default: break
     }
     persist(); renderPages()

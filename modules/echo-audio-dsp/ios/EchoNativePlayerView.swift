@@ -275,6 +275,14 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var connectionOnline = false
   @Published var controlsEnabled = false
   @Published var darkModeEnabled = false
+  @Published var desktopLyricsAnimation = "flow"
+  @Published var desktopLyricsEnabled = false
+  @Published var desktopLyricsOpacity = "medium"
+  @Published var desktopLyricsOnlyWhilePlaying = true
+  @Published var desktopLyricsPosition = "bottom"
+  @Published var desktopLyricsShowMetadata = true
+  @Published var desktopLyricsSize = "medium"
+  @Published var desktopLyricsStyle = "glass"
   @Published var durationMs = 0.0
   @Published var eqEnabled = false
   @Published var externalSourcePicker: EchoNativeExternalSourcePickerPayload?
@@ -430,6 +438,7 @@ private struct EchoNativeAppScreen: View {
         #endif
       }
       .tint(echoAccent)
+      EchoNativeDesktopLyricsOverlay(model: playerModel, onAction: onAction)
     }
     .sheet(item: $playerModel.externalSourcePicker) { payload in
       EchoNativeExternalSourcePicker(payload: payload, onAction: onAction)
@@ -557,6 +566,185 @@ private struct EchoNativeAppScreen: View {
     case "search": return english ? "Search" : "搜索"
     case "connect": return english ? "Connect" : "连接"
     default: return english ? "Settings" : "设置"
+    }
+  }
+}
+
+private struct EchoNativeDesktopLyricsOverlay: View {
+  @ObservedObject var model: EchoNativePlayerModel
+  let onAction: ([String: Any]) -> Void
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var animationPhase = false
+
+  private var activeLine: EchoNativeMetadataService.LyricLine? {
+    guard model.lyricLines.indices.contains(model.activeLyricIndex) else { return nil }
+    return model.lyricLines[model.activeLyricIndex]
+  }
+
+  private var previousLine: EchoNativeMetadataService.LyricLine? {
+    guard model.activeLyricIndex > 0 else { return nil }
+    return model.lyricLines[model.activeLyricIndex - 1]
+  }
+
+  private var nextLine: EchoNativeMetadataService.LyricLine? {
+    let index = model.activeLyricIndex + 1
+    guard model.lyricLines.indices.contains(index) else { return nil }
+    return model.lyricLines[index]
+  }
+
+  private var shouldShow: Bool {
+    model.desktopLyricsEnabled
+      && activeLine != nil
+      && (!model.desktopLyricsOnlyWhilePlaying || model.isPlaying)
+  }
+
+  var body: some View {
+    if shouldShow {
+      ZStack(alignment: overlayAlignment) {
+        overlayContent
+      }
+      .padding(.horizontal, 18)
+      .padding(.top, 12)
+      .padding(.bottom, model.desktopLyricsPosition == "bottom" ? 78 : 12)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .zIndex(10)
+      .transition(.opacity.combined(with: .move(edge: model.desktopLyricsPosition == "top" ? .top : .bottom)))
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: shouldShow)
+      .onAppear(perform: restartAnimation)
+      .onChange(of: model.desktopLyricsAnimation) { _ in restartAnimation() }
+    }
+  }
+
+  private var overlayAlignment: Alignment {
+    switch model.desktopLyricsPosition {
+    case "top": return .top
+    case "center": return .center
+    default: return .bottom
+    }
+  }
+
+  private var overlayContent: some View {
+    Button {
+      onAction(["action": "lyrics"])
+    } label: {
+      VStack(alignment: .leading, spacing: 6) {
+        if model.desktopLyricsShowMetadata && (!model.title.isEmpty || !model.artist.isEmpty) {
+          HStack(spacing: 6) {
+            Image(systemName: "music.note")
+              .font(.system(size: 10, weight: .bold))
+              .accessibilityHidden(true)
+            Text([model.title, model.artist].filter { !$0.isEmpty }.joined(separator: "  ·  "))
+              .lineLimit(1)
+          }
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundColor(overlayForeground.opacity(0.58))
+        }
+
+        if let previousLine {
+          Text(previousLine.text)
+            .font(.system(size: fontSize * 0.66, weight: .medium))
+            .foregroundColor(overlayForeground.opacity(0.36))
+            .lineLimit(1)
+        }
+
+        if let activeLine {
+          Text(activeLine.text)
+            .font(.system(size: fontSize, weight: .bold))
+            .foregroundColor(overlayForeground)
+            .lineLimit(2)
+            .minimumScaleFactor(0.72)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .id(model.activeLyricIndex)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
+
+        if let nextLine {
+          Text(nextLine.text)
+            .font(.system(size: fontSize * 0.66, weight: .medium))
+            .foregroundColor(overlayForeground.opacity(0.36))
+            .lineLimit(1)
+        }
+      }
+      .frame(maxWidth: 620, alignment: .leading)
+      .padding(.horizontal, 18)
+      .padding(.vertical, model.desktopLyricsSize == "large" ? 16 : 13)
+      .background(overlayBackground)
+      .overlay {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+          .stroke(overlayForeground.opacity(model.desktopLyricsStyle == "minimal" ? 0.18 : 0.12), lineWidth: 1)
+      }
+      .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+      .shadow(color: Color.black.opacity(model.desktopLyricsStyle == "minimal" ? 0.12 : 0.28), radius: 18, y: 8)
+    }
+    .buttonStyle(.plain)
+    .scaleEffect(scaleEffect)
+    .offset(y: verticalOffset)
+    .animation(reduceMotion ? nil : .easeOut(duration: 0.28), value: model.activeLyricIndex)
+    .accessibilityLabel(model.language == "en" ? "Desktop lyrics" : "桌面歌词")
+    .accessibilityHint(model.language == "en" ? "Open the full lyrics view" : "打开完整歌词视图")
+  }
+
+  private var fontSize: CGFloat {
+    switch model.desktopLyricsSize {
+    case "small": return 18
+    case "large": return 30
+    default: return 24
+    }
+  }
+
+  private var cornerRadius: CGFloat {
+    model.desktopLyricsStyle == "minimal" ? 12 : 20
+  }
+
+  private var opacity: Double {
+    switch model.desktopLyricsOpacity {
+    case "low": return 0.42
+    case "high": return 0.88
+    default: return 0.66
+    }
+  }
+
+  private var overlayForeground: Color {
+    model.desktopLyricsStyle == "solid" ? .white : echoInk
+  }
+
+  @ViewBuilder
+  private var overlayBackground: some View {
+    switch model.desktopLyricsStyle {
+    case "solid":
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .fill(Color.black.opacity(opacity))
+    case "minimal":
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .fill(Color.clear)
+    default:
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .fill(.ultraThinMaterial)
+        .opacity(opacity)
+        .overlay {
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(echoAccent.opacity(0.08))
+        }
+    }
+  }
+
+  private var scaleEffect: CGFloat {
+    guard !reduceMotion, model.desktopLyricsAnimation == "pulse" else { return 1 }
+    return animationPhase ? 1.015 : 0.99
+  }
+
+  private var verticalOffset: CGFloat {
+    guard !reduceMotion, model.desktopLyricsAnimation == "flow" else { return 0 }
+    return animationPhase ? -2 : 2
+  }
+
+  private func restartAnimation() {
+    animationPhase = false
+    guard !reduceMotion, model.desktopLyricsAnimation != "calm" else { return }
+    let duration = model.desktopLyricsAnimation == "pulse" ? 1.8 : 2.8
+    withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
+      animationPhase = true
     }
   }
 }

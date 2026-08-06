@@ -7,6 +7,14 @@ extension EchoNativeAppStore {
     playerModel.connectionOnline = connectionStatus.online
     playerModel.artworkBackgroundEnabled = persistent.settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = persistent.settings.darkModeEnabled
+    playerModel.desktopLyricsAnimation = persistent.settings.desktopLyricsAnimation
+    playerModel.desktopLyricsEnabled = persistent.settings.desktopLyricsEnabled
+    playerModel.desktopLyricsOpacity = persistent.settings.desktopLyricsOpacity
+    playerModel.desktopLyricsOnlyWhilePlaying = persistent.settings.desktopLyricsOnlyWhilePlaying
+    playerModel.desktopLyricsPosition = persistent.settings.desktopLyricsPosition
+    playerModel.desktopLyricsShowMetadata = persistent.settings.desktopLyricsShowMetadata
+    playerModel.desktopLyricsSize = persistent.settings.desktopLyricsSize
+    playerModel.desktopLyricsStyle = persistent.settings.desktopLyricsStyle
     playerModel.followSystemAppearance = persistent.settings.followSystemAppearance
     playerModel.language = persistent.settings.language
     playerModel.playbackMode = persistent.settings.playbackMode
@@ -681,7 +689,28 @@ extension EchoNativeAppStore {
     let defaultSourceUnavailable = (settings.defaultLibrarySource == "echo" && !persistent.echoConnection.enabled)
       || (settings.defaultLibrarySource == "remote" && !persistent.powerampConnection.enabled)
     let defaultLibrarySource = defaultSourceUnavailable ? "local" : settings.defaultLibrarySource
+    let desktopLyricsSection = section("desktopLyrics", localized("Desktop lyrics", "桌面歌词"), localized("A native floating lyric layer with motion and style controls.", "原生浮动歌词层，可自定义动态效果与显示样式。"), "quote.bubble.fill", [
+      toggle("desktopLyricsEnabled", localized("Enable desktop lyrics", "启用桌面歌词"), localized("Show the current lyric above every app page.", "在应用页面上方显示当前歌词。"), settings.desktopLyricsEnabled),
+      toggle("desktopLyricsOnlyWhilePlaying", localized("Only while playing", "仅播放时显示"), localized("Hide the overlay when playback is paused.", "暂停播放时隐藏浮层。"), settings.desktopLyricsOnlyWhilePlaying, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsShowMetadata", localized("Show track details", "显示歌曲信息"), localized("Include title and artist above the lyric.", "在歌词上方显示标题和艺术家。"), settings.desktopLyricsShowMetadata, disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsStyle", localized("Surface style", "表面样式"), localized("Choose the visual treatment of the floating layer.", "选择浮层的视觉样式。"), settings.desktopLyricsStyle, [
+        option("glass", localized("Glass", "玻璃")), option("solid", localized("Solid", "纯色")), option("minimal", localized("Minimal", "极简")),
+      ], disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsAnimation", localized("Motion", "动态效果"), localized("Choose a calm, flowing, or breathing animation.", "选择静止、流动或呼吸动画。"), settings.desktopLyricsAnimation, [
+        option("calm", localized("Calm", "静谧")), option("flow", localized("Flow", "流动")), option("pulse", localized("Pulse", "呼吸")),
+      ], disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsSize, [
+        option("small", localized("Small", "小")), option("medium", localized("Medium", "中")), option("large", localized("Large", "大")),
+      ], disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place the overlay at the top, center, or bottom.", "将浮层放在顶部、中央或底部。"), settings.desktopLyricsPosition, [
+        option("top", localized("Top", "顶部")), option("center", localized("Center", "居中")), option("bottom", localized("Bottom", "底部")),
+      ], disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsOpacity", localized("Background opacity", "背景透明度"), localized("Control how much of the artwork remains visible behind it.", "控制浮层背景的透明程度。"), settings.desktopLyricsOpacity, [
+        option("low", localized("Low", "低")), option("medium", localized("Medium", "中")), option("high", localized("High", "高")),
+      ], disabled: !settings.desktopLyricsEnabled),
+    ])
     let sections: [[String: Any]] = [
+      desktopLyricsSection,
       section("interface", localized("Interface", "界面"), localized("Language and appearance", "语言与外观"), "paintbrush", [
         picker("language", localized("Language", "语言"), localized("Changes the entire app language.", "更改整个应用的显示语言。"), settings.language, [option("zh", "中文"), option("en", "English")]),
         picker("defaultPage", localized("Launch page", "启动页面"), localized("The tab shown when the app starts.", "应用启动时显示的页面。"), settings.defaultPage, [
@@ -764,8 +793,8 @@ extension EchoNativeAppStore {
     ["boolValue": boolValue, "description": description, "disabled": disabled, "id": id, "kind": kind, "options": options, "selection": selection, "title": title, "value": value]
   }
 
-  private func toggle(_ id: String, _ title: String, _ description: String, _ value: Bool) -> [String: Any] {
-    row(id, title, description, kind: "toggle", boolValue: value)
+  private func toggle(_ id: String, _ title: String, _ description: String, _ value: Bool, disabled: Bool = false) -> [String: Any] {
+    row(id, title, description, kind: "toggle", boolValue: value, disabled: disabled)
   }
 
   private func picker(_ id: String, _ title: String, _ description: String, _ selection: String, _ options: [[String: Any]], disabled: Bool = false) -> [String: Any] {

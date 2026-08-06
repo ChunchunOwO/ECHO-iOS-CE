@@ -107,6 +107,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(albumArtwork, /albumArtist/u);
   assert.match(coreTypes, /recentTracks = try values\.decodeIfPresent\(\[EchoNativeCoreTrack\]\.self, forKey: \.recentTracks\) \?\? \[\]/u);
   assert.match(coreTypes, /streamingQueueTracks = try values\.decodeIfPresent\(\[EchoNativeCoreTrack\]\.self, forKey: \.streamingQueueTracks\) \?\? \[\]/u);
+  assert.match(coreTypes, /var desktopLyricsEnabled = false/u);
+  assert.match(coreTypes, /desktopLyricsEnabled = try values\.decodeIfPresent\(Bool\.self, forKey: \.desktopLyricsEnabled\) \?\? false/u);
   assert.match(metadata, /guard !text\.isEmpty else \{ continue \}/u);
   assert.match(metadata, /Dictionary\(grouping: result\) \{ Int\(\$0\.milliseconds\.rounded\(\)\) \}/u);
   assert.match(metadata, /seen\.insert\(\$0\.text\)\.inserted/u);
@@ -184,6 +186,9 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(player, /hostingController\.overrideUserInterfaceStyle = style/u);
   assert.match(player, /@Published var lyricLines:/u);
   assert.match(player, /ForEach\(Array\(model\.lyricLines\.enumerated\(\)\), id: \\.offset\)/u);
+  assert.match(player, /struct EchoNativeDesktopLyricsOverlay: View/u);
+  assert.match(player, /model\.desktopLyricsPosition/u);
+  assert.match(player, /ultraThinMaterial/u);
   assert.doesNotMatch(player, /@Published var lyricTexts:/u);
   assert.doesNotMatch(player, /model\.repeatOne/u);
   assert.equal((player.match(/themedTab\(playerBackground: true\)/gu) ?? []).length, 2);
@@ -204,6 +209,9 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(pages, /let sortingCollections = model\.payload\?\.library\?\.collections\.isEmpty == false/u);
   assert.match(pages, /Text\(library\.labels\.collections\)[\s\S]*librarySortMenu[\s\S]*EchoNativeDisplayModeButton/u);
   assert.match(pages, /let indexTitle: String/u);
+  assert.match(payload, /let desktopLyricsSection = section\("desktopLyrics"/u);
+  assert.match(payload, /picker\("desktopLyricsAnimation"/u);
+  assert.match(store, /case "desktopLyricsEnabled"/u);
   assert.ok(pages.includes('Text("DISC \\(discNo)")'));
   assert.match(pages, /"action": "playlistPlay"/u);
   assert.match(pages, /"action": "streamingPlaylistOpen", "id": playlist\.id, "play": true/u);

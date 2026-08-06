@@ -210,6 +210,14 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     "streamable": true,
   ]
   var darkModeEnabled = false
+  var desktopLyricsAnimation = "flow"
+  var desktopLyricsEnabled = false
+  var desktopLyricsOpacity = "medium"
+  var desktopLyricsOnlyWhilePlaying = true
+  var desktopLyricsPosition = "bottom"
+  var desktopLyricsShowMetadata = true
+  var desktopLyricsSize = "medium"
+  var desktopLyricsStyle = "glass"
   var defaultLibrarySource = "local"
   var defaultLocalLibraryView = "songs"
   var defaultPage = "control"
@@ -255,6 +263,14 @@ struct EchoNativeCoreSettings: Codable, Sendable {
       "streamable": true,
     ]
     darkModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .darkModeEnabled) ?? false
+    desktopLyricsAnimation = try values.decodeIfPresent(String.self, forKey: .desktopLyricsAnimation) ?? "flow"
+    desktopLyricsEnabled = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsEnabled) ?? false
+    desktopLyricsOpacity = try values.decodeIfPresent(String.self, forKey: .desktopLyricsOpacity) ?? "medium"
+    desktopLyricsOnlyWhilePlaying = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsOnlyWhilePlaying) ?? true
+    desktopLyricsPosition = try values.decodeIfPresent(String.self, forKey: .desktopLyricsPosition) ?? "bottom"
+    desktopLyricsShowMetadata = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsShowMetadata) ?? true
+    desktopLyricsSize = try values.decodeIfPresent(String.self, forKey: .desktopLyricsSize) ?? "medium"
+    desktopLyricsStyle = try values.decodeIfPresent(String.self, forKey: .desktopLyricsStyle) ?? "glass"
     defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "local"
     defaultLocalLibraryView = try values.decodeIfPresent(String.self, forKey: .defaultLocalLibraryView) ?? "songs"
     defaultPage = try values.decodeIfPresent(String.self, forKey: .defaultPage) ?? "control"

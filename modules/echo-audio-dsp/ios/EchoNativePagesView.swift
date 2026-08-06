@@ -2323,6 +2323,8 @@ struct EchoNativePagesScreen: View {
         .tint(echoAccent)
       }
       .padding(.vertical, 12)
+      .disabled(row.disabled)
+      .opacity(row.disabled ? 0.42 : 1)
     case "picker":
       VStack(alignment: .leading, spacing: 10) {
         settingText(row)

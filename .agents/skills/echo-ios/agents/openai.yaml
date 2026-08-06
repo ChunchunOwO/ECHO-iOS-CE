@@ -1,0 +1,4 @@
+interface:
+  display_name: "ECHO iOS Project"
+  short_description: "Maintain ECHO iPhone with Swift-first conventions"
+  default_prompt: "Use $echo-ios to change this ECHO iPhone project. Prefer native Swift/SwiftUI for new behavior and follow the existing bridge, persistence, audio, and test boundaries."
