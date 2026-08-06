@@ -352,7 +352,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   func pictureInPictureController(
     _ pictureInPictureController: AVPictureInPictureController,
     skipByInterval skipInterval: CMTime,
-    completionHandler: @escaping () -> Void
+    completion completionHandler: @escaping () -> Void
   ) {
     completionHandler()
   }
