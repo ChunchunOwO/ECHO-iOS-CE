@@ -212,7 +212,9 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var darkModeEnabled = false
   var desktopLyricsAnimation = "flow"
   var desktopLyricsEnabled = false
+  var desktopLyricsFontSize = 38.0
   var desktopLyricsOpacity = "medium"
+  var desktopLyricsOpacityValue = 0.66
   var desktopLyricsOnlyWhilePlaying = true
   var desktopLyricsPosition = "bottom"
   var desktopLyricsShowMetadata = true
@@ -266,10 +268,16 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     desktopLyricsAnimation = try values.decodeIfPresent(String.self, forKey: .desktopLyricsAnimation) ?? "flow"
     desktopLyricsEnabled = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsEnabled) ?? false
     desktopLyricsOpacity = try values.decodeIfPresent(String.self, forKey: .desktopLyricsOpacity) ?? "medium"
+    let legacyOpacity = desktopLyricsOpacity
+    desktopLyricsOpacityValue = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsOpacityValue)
+      ?? (legacyOpacity == "low" ? 0.42 : legacyOpacity == "high" ? 0.88 : 0.66)
     desktopLyricsOnlyWhilePlaying = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsOnlyWhilePlaying) ?? true
     desktopLyricsPosition = try values.decodeIfPresent(String.self, forKey: .desktopLyricsPosition) ?? "bottom"
     desktopLyricsShowMetadata = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsShowMetadata) ?? true
     desktopLyricsSize = try values.decodeIfPresent(String.self, forKey: .desktopLyricsSize) ?? "medium"
+    let legacySize = desktopLyricsSize
+    desktopLyricsFontSize = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsFontSize)
+      ?? (legacySize == "small" ? 29 : legacySize == "large" ? 48 : 38)
     desktopLyricsStyle = try values.decodeIfPresent(String.self, forKey: .desktopLyricsStyle) ?? "glass"
     defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "local"
     defaultLocalLibraryView = try values.decodeIfPresent(String.self, forKey: .defaultLocalLibraryView) ?? "songs"

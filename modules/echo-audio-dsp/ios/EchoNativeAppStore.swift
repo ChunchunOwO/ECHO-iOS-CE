@@ -142,6 +142,10 @@ final class EchoNativeAppStore {
     }
   }
 
+  func attachDesktopLyrics(to view: UIView) {
+    desktopLyricsController.attach(to: view)
+  }
+
   func stop() {
     playbackGeneration &+= 1
     echoAlbumGeneration &+= 1
@@ -427,6 +431,7 @@ final class EchoNativeAppStore {
     case "streamingConnect": connectMode = "streaming"; playerModel.activePage = "connect"; renderPages()
     case "settingToggle": updateSettingToggle(payload)
     case "settingSelect": updateSettingSelection(payload)
+    case "settingNumber": updateSettingNumber(payload)
     case "settingAction": performSettingAction(payload)
     default: break
     }
@@ -437,6 +442,7 @@ final class EchoNativeAppStore {
     playerModel.activePage = settings.defaultPage
     playerModel.artworkBackgroundEnabled = settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = settings.darkModeEnabled
+    playerModel.desktopLyricsEnabled = settings.desktopLyricsEnabled
     playerModel.followSystemAppearance = settings.followSystemAppearance
     playerModel.language = settings.language
     playerModel.playbackMode = settings.playbackMode
@@ -1892,7 +1898,7 @@ final class EchoNativeAppStore {
     case "followSystemAppearance": persistent.settings.followSystemAppearance = enabled; playerModel.followSystemAppearance = enabled
     case "loudness": persistent.settings.loudnessEnabled = enabled; playerModel.loudnessEnabled = enabled; audioEngine.setLoudness(enabled)
     case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = enabled
-    case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled
+    case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled; playerModel.desktopLyricsEnabled = enabled
     case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = enabled
     case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = enabled
     case "autoQueueImports": persistent.settings.autoQueueImportedLocalTracks = enabled
@@ -1950,6 +1956,20 @@ final class EchoNativeAppStore {
     }
     configureDesktopLyrics()
     persist(); renderPages()
+  }
+
+  private func updateSettingNumber(_ payload: [String: Any]) {
+    guard let key = payload["key"] as? String, let value = number(payload["value"]) else { return }
+    switch key {
+    case "desktopLyricsOpacity": persistent.settings.desktopLyricsOpacityValue = max(0.2, min(0.95, value))
+    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(24, min(56, value))
+    default: return
+    }
+    configureDesktopLyrics()
+    if payload["commit"] as? Bool == true {
+      persist()
+      renderPages()
+    }
   }
 
   private func performSettingAction(_ payload: [String: Any]) {
@@ -2756,11 +2776,11 @@ final class EchoNativeAppStore {
     desktopLyricsController.configure(.init(
       animation: settings.desktopLyricsAnimation,
       enabled: settings.desktopLyricsEnabled,
-      opacity: settings.desktopLyricsOpacity,
+      fontSize: settings.desktopLyricsFontSize,
+      opacity: settings.desktopLyricsOpacityValue,
       onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
       position: settings.desktopLyricsPosition,
       showMetadata: settings.desktopLyricsShowMetadata,
-      size: settings.desktopLyricsSize,
       style: settings.desktopLyricsStyle
     ))
     updateDesktopLyrics()

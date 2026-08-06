@@ -7,6 +7,7 @@ extension EchoNativeAppStore {
     playerModel.connectionOnline = connectionStatus.online
     playerModel.artworkBackgroundEnabled = persistent.settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = persistent.settings.darkModeEnabled
+    playerModel.desktopLyricsEnabled = persistent.settings.desktopLyricsEnabled
     playerModel.followSystemAppearance = persistent.settings.followSystemAppearance
     playerModel.language = persistent.settings.language
     playerModel.playbackMode = persistent.settings.playbackMode
@@ -691,18 +692,13 @@ extension EchoNativeAppStore {
       picker("desktopLyricsAnimation", localized("Motion", "动态效果"), localized("Choose a calm, flowing, or breathing animation.", "选择静止、流动或呼吸动画。"), settings.desktopLyricsAnimation, [
         option("calm", localized("Calm", "静谧")), option("flow", localized("Flow", "流动")), option("pulse", localized("Pulse", "呼吸")),
       ], disabled: !settings.desktopLyricsEnabled),
-      picker("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsSize, [
-        option("small", localized("Small", "小")), option("medium", localized("Medium", "中")), option("large", localized("Large", "大")),
-      ], disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsFontSize, min: 24, max: 56, step: 1, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place lyrics at the top, center, or bottom of the Picture in Picture window.", "将歌词放在画中画窗口的顶部、中央或底部。"), settings.desktopLyricsPosition, [
         option("top", localized("Top", "顶部")), option("center", localized("Center", "居中")), option("bottom", localized("Bottom", "底部")),
       ], disabled: !settings.desktopLyricsEnabled),
-      picker("desktopLyricsOpacity", localized("Background opacity", "背景透明度"), localized("Control the Picture in Picture background opacity.", "控制画中画窗口背景的透明程度。"), settings.desktopLyricsOpacity, [
-        option("low", localized("Low", "低")), option("medium", localized("Medium", "中")), option("high", localized("High", "高")),
-      ], disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsOpacity", localized("Background opacity", "背景透明度"), localized("Control the Picture in Picture background opacity.", "控制画中画窗口背景的透明程度。"), settings.desktopLyricsOpacityValue, min: 0.2, max: 0.95, step: 0.01, disabled: !settings.desktopLyricsEnabled),
     ])
     let sections: [[String: Any]] = [
-      desktopLyricsSection,
       section("interface", localized("Interface", "界面"), localized("Language and appearance", "语言与外观"), "paintbrush", [
         picker("language", localized("Language", "语言"), localized("Changes the entire app language.", "更改整个应用的显示语言。"), settings.language, [option("zh", "中文"), option("en", "English")]),
         picker("defaultPage", localized("Launch page", "启动页面"), localized("The tab shown when the app starts.", "应用启动时显示的页面。"), settings.defaultPage, [
@@ -713,6 +709,7 @@ extension EchoNativeAppStore {
         toggle("followSystemAppearance", localized("Follow system appearance", "跟随系统外观"), localized("Use the iOS light or dark appearance automatically.", "自动使用 iOS 的浅色或深色外观。"), settings.followSystemAppearance),
         picker("manualAppearance", localized("Manual appearance", "手动外观"), localized("Used when following the system is off.", "关闭跟随系统后使用。"), settings.darkModeEnabled ? "dark" : "light", [option("light", localized("Light", "浅色")), option("dark", localized("Dark", "深色"))], disabled: settings.followSystemAppearance),
       ]),
+      desktopLyricsSection,
       section("playback", localized("Playback", "播放"), localized("DSP and playback behavior", "DSP 与播放行为"), "waveform", [
         row("eq", localized("Equalizer", "均衡器"), localized("Ten-band native DSP equalizer.", "十段原生 DSP 均衡器。"), kind: "eq", value: settings.eqPreset),
         toggle("loudness", localized("Loudness normalization", "响度归一化"), localized("Reduces large volume differences between tracks.", "减小歌曲之间过大的响度差异。"), settings.loudnessEnabled),
@@ -778,11 +775,15 @@ extension EchoNativeAppStore {
     kind: String,
     value: String = "",
     boolValue: Any = NSNull(),
+    numberValue: Any = NSNull(),
+    minimumValue: Any = NSNull(),
+    maximumValue: Any = NSNull(),
+    stepValue: Any = NSNull(),
     options: [[String: Any]] = [],
     selection: Any = NSNull(),
     disabled: Bool = false
   ) -> [String: Any] {
-    ["boolValue": boolValue, "description": description, "disabled": disabled, "id": id, "kind": kind, "options": options, "selection": selection, "title": title, "value": value]
+    ["boolValue": boolValue, "description": description, "disabled": disabled, "id": id, "kind": kind, "maximumValue": maximumValue, "minimumValue": minimumValue, "numberValue": numberValue, "options": options, "selection": selection, "stepValue": stepValue, "title": title, "value": value]
   }
 
   private func toggle(_ id: String, _ title: String, _ description: String, _ value: Bool, disabled: Bool = false) -> [String: Any] {
@@ -791,6 +792,33 @@ extension EchoNativeAppStore {
 
   private func picker(_ id: String, _ title: String, _ description: String, _ selection: String, _ options: [[String: Any]], disabled: Bool = false) -> [String: Any] {
     row(id, title, description, kind: "picker", options: options, selection: selection, disabled: disabled)
+  }
+
+  private func slider(
+    _ id: String,
+    _ title: String,
+    _ description: String,
+    _ value: Double,
+    min: Double,
+    max: Double,
+    step: Double,
+    disabled: Bool = false
+  ) -> [String: Any] {
+    let label = id == "desktopLyricsOpacity"
+      ? "\(Int((value * 100).rounded()))%"
+      : "\(Int(value.rounded())) pt"
+    return row(
+      id,
+      title,
+      description,
+      kind: "slider",
+      value: label,
+      numberValue: value,
+      minimumValue: min,
+      maximumValue: max,
+      stepValue: step,
+      disabled: disabled
+    )
   }
 
   private func action(_ id: String, _ title: String, _ description: String, disabled: Bool = false) -> [String: Any] {

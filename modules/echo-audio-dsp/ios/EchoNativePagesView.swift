@@ -275,8 +275,12 @@ private struct EchoNativeSettingRow: Decodable, Identifiable {
   let disabled: Bool
   let id: String
   let kind: String
+  let maximumValue: Double?
+  let minimumValue: Double?
+  var numberValue: Double?
   let options: [EchoNativePageOption]
   var selection: String?
+  let stepValue: Double?
   let title: String
   let value: String
 }
@@ -2343,6 +2347,37 @@ struct EchoNativePagesScreen: View {
       .padding(.vertical, 12)
       .disabled(row.disabled)
       .opacity(row.disabled ? 0.42 : 1)
+    case "slider":
+      let minimum = row.minimumValue ?? 0
+      let maximum = row.maximumValue ?? 1
+      let step = row.stepValue ?? 0.01
+      let current = currentSettingRow(row.id)?.numberValue ?? row.numberValue ?? minimum
+      VStack(alignment: .leading, spacing: 9) {
+        settingText(row)
+        Slider(
+          value: Binding(
+            get: { currentSettingRow(row.id)?.numberValue ?? row.numberValue ?? minimum },
+            set: { value in
+              updateSettingRow(row.id) { $0.numberValue = value }
+              onAction(["action": "settingNumber", "key": row.id, "value": value, "commit": false])
+            }
+          ),
+          in: minimum...maximum,
+          step: step,
+          onEditingChanged: { editing in
+            guard !editing else { return }
+            let value = currentSettingRow(row.id)?.numberValue ?? current
+            onAction(["action": "settingNumber", "key": row.id, "value": value, "commit": true])
+          }
+        )
+        Text(sliderValueLabel(row.id, value: currentSettingRow(row.id)?.numberValue ?? current))
+          .font(.system(size: 11, weight: .bold, design: .rounded))
+          .foregroundColor(echoAccent)
+          .frame(maxWidth: .infinity, alignment: .trailing)
+      }
+      .padding(.vertical, 12)
+      .disabled(row.disabled)
+      .opacity(row.disabled ? 0.42 : 1)
     case "eq":
       Button {
         showEqualizer = true
@@ -2398,6 +2433,12 @@ struct EchoNativePagesScreen: View {
           .fixedSize(horizontal: false, vertical: true)
       }
     }
+  }
+
+  private func sliderValueLabel(_ id: String, value: Double) -> String {
+    id == "desktopLyricsOpacity"
+      ? "\(Int((value * 100).rounded()))%"
+      : "\(Int(value.rounded())) pt"
   }
 
   private func currentSettingRow(_ id: String) -> EchoNativeSettingRow? {

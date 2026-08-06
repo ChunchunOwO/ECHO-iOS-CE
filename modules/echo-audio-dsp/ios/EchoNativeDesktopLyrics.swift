@@ -10,16 +10,18 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   struct Configuration: Equatable {
     var animation = "flow"
     var enabled = false
-    var opacity = "medium"
+    var fontSize = 38.0
+    var opacity = 0.66
     var onlyWhilePlaying = true
     var position = "bottom"
     var showMetadata = true
-    var size = "medium"
     var style = "glass"
   }
 
   private let displayLayer = AVSampleBufferDisplayLayer()
+  private let hostView = UIView(frame: CGRect(x: 0, y: 0, width: 108, height: 32))
   private var pictureInPictureController: AVPictureInPictureController?
+  private var pictureInPicturePossibleObservation: NSKeyValueObservation?
   private var renderTimer: Timer?
   private var configuration = Configuration()
   private var title = ""
@@ -42,12 +44,36 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       sampleBufferDisplayLayer: displayLayer,
       playbackDelegate: self
     )
-    pictureInPictureController = AVPictureInPictureController(contentSource: source)
-    pictureInPictureController?.delegate = self
+    let controller = AVPictureInPictureController(contentSource: source)
+    controller.delegate = self
+    controller.requiresLinearPlayback = true
+    controller.canStartPictureInPictureAutomaticallyFromInline = true
+    pictureInPictureController = controller
+    pictureInPicturePossibleObservation = controller.observe(\AVPictureInPictureController.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] controller, _ in
+      guard controller.isPictureInPicturePossible else { return }
+      Task { @MainActor in self?.startIfNeeded() }
+    }
   }
 
   deinit {
     renderTimer?.invalidate()
+    pictureInPicturePossibleObservation?.invalidate()
+  }
+
+  func attach(to container: UIView) {
+    if hostView.superview !== container {
+      hostView.removeFromSuperview()
+      container.insertSubview(hostView, at: 0)
+    }
+    hostView.isUserInteractionEnabled = false
+    hostView.backgroundColor = .clear
+    hostView.frame = CGRect(x: 0, y: 0, width: 108, height: 32)
+    if displayLayer.superlayer !== hostView.layer {
+      displayLayer.removeFromSuperlayer()
+      hostView.layer.addSublayer(displayLayer)
+    }
+    displayLayer.frame = hostView.bounds
+    installControlTimebase()
   }
 
   func configure(_ next: Configuration) {
@@ -86,9 +112,13 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     stopPresentation()
   }
 
+  private var hasContent: Bool {
+    !currentLyric.isEmpty || !title.isEmpty
+  }
+
   private var shouldPresent: Bool {
     configuration.enabled
-      && !currentLyric.isEmpty
+      && hasContent
       && (!configuration.onlyWhilePlaying || isPlaying)
   }
 
@@ -99,6 +129,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     }
     startRenderTimer()
     renderFrame()
+    activateAudioSession()
     startIfNeeded()
   }
 
@@ -115,7 +146,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private func startIfNeeded() {
     guard configuration.enabled,
       !userDismissed,
-      !currentLyric.isEmpty,
+      hasContent,
       !(configuration.onlyWhilePlaying && !isPlaying),
       let pictureInPictureController,
       !pictureInPictureController.isPictureInPictureActive,
@@ -123,7 +154,28 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       pictureInPictureController.isPictureInPicturePossible
     else { return }
     startRequested = true
+    activateAudioSession()
     pictureInPictureController.startPictureInPicture()
+  }
+
+  private func installControlTimebase() {
+    guard displayLayer.controlTimebase == nil else { return }
+    var timebase: CMTimebase?
+    let clock = CMClockGetHostTimeClock()
+    guard CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault, sourceClock: clock, timebaseOut: &timebase) == noErr,
+      let timebase
+    else { return }
+    CMTimebaseSetTime(timebase, time: CMClockGetTime(clock))
+    CMTimebaseSetRate(timebase, rate: 1)
+    displayLayer.controlTimebase = timebase
+  }
+
+  private func activateAudioSession() {
+    let session = AVAudioSession.sharedInstance()
+    if session.category != .playback {
+      try? session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+    }
+    try? session.setActive(true)
   }
 
   private func startRenderTimer() {
@@ -134,8 +186,11 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private func renderFrame() {
-    guard !currentLyric.isEmpty, let sampleBuffer = makeSampleBuffer() else { return }
-    if displayLayer.status == .failed { displayLayer.flush() }
+    guard hasContent, let sampleBuffer = makeSampleBuffer() else { return }
+    if displayLayer.status == .failed {
+      pictureInPictureController?.invalidatePlaybackState()
+      displayLayer.flush()
+    }
     displayLayer.enqueue(sampleBuffer)
     frameIndex &+= 1
   }
@@ -174,7 +229,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
     var timing = CMSampleTimingInfo(
       duration: CMTime(value: 1, timescale: 15),
-      presentationTimeStamp: CMTime(value: frameIndex, timescale: 15),
+      presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
       decodeTimeStamp: .invalid
     )
     var sampleBuffer: CMSampleBuffer?
@@ -248,7 +303,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.scaleBy(x: 1, y: -1)
     let textPanel = CGRect(x: panel.minX + 32, y: CGFloat(height) - panel.maxY + 26, width: panel.width - 64, height: panel.height - 42)
     var textY = textPanel.minY
-    if configuration.showMetadata {
+    if configuration.showMetadata && !currentLyric.isEmpty {
       let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  ·  ")
       if !metadata.isEmpty {
         drawText(metadata, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 28), font: .systemFont(ofSize: 18, weight: .semibold), color: .white.withAlphaComponent(0.58), context: context)
@@ -259,7 +314,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       drawText(previousLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
       textY += 34
     }
-    drawText(currentLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 86), font: .systemFont(ofSize: fontSize, weight: .bold), color: .white, context: context)
+    drawText(currentLyric.isEmpty ? title : currentLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 86), font: .systemFont(ofSize: fontSize, weight: .bold), color: .white, context: context)
     textY += 92
     if !nextLyric.isEmpty {
       drawText(nextLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
@@ -268,12 +323,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private var backgroundColor: UIColor {
-    let alpha: CGFloat
-    switch configuration.opacity {
-    case "low": alpha = 0.42
-    case "high": alpha = 0.88
-    default: alpha = 0.66
-    }
+    let alpha = CGFloat(max(0.2, min(0.95, configuration.opacity)))
     switch configuration.style {
     case "minimal": return UIColor.black.withAlphaComponent(alpha * 0.38)
     case "solid": return UIColor.black.withAlphaComponent(alpha)
@@ -282,11 +332,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private var fontSize: CGFloat {
-    switch configuration.size {
-    case "small": return 29
-    case "large": return 48
-    default: return 38
-    }
+    CGFloat(max(24, min(56, configuration.fontSize)))
   }
 
   private func panelY(height: Int) -> CGFloat {
@@ -342,7 +388,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions) {}
 
   func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
-    CMTimeRange(start: .zero, duration: CMTime(seconds: max(1, durationMs / 1_000), preferredTimescale: 600))
+    CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
   }
 
   func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool {
