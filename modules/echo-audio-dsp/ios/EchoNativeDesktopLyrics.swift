@@ -1,6 +1,7 @@
 import AVFoundation
 import AVKit
 import CoreMedia
+import CoreImage.CIFilterBuiltins
 import CoreVideo
 import Foundation
 import QuartzCore
@@ -10,16 +11,17 @@ import UIKit
 final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictureInPictureControllerDelegate, @preconcurrency AVPictureInPictureSampleBufferPlaybackDelegate {
   struct Configuration: Equatable {
     var animation = "flow"
+    var background = "theme"
     var enabled = false
     var fontSize = 26.0
-    var opacity = 0.66
+    var heightScale = 0.36
     var onlyWhilePlaying = true
     var position = "bottom"
     var showMetadata = true
     var style = "glass"
     var timedReveal = false
     var transitionAnimation = false
-    var widthScale = 0.5
+    var widthScale = 1.0
   }
 
   private let displayLayer = AVSampleBufferDisplayLayer()
@@ -28,6 +30,11 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private var pictureInPicturePossibleObservation: NSKeyValueObservation?
   private var renderTimer: Timer?
   private var configuration = Configuration()
+  private var importedBackgroundImage: UIImage?
+  private var artworkImage: UIImage?
+  private var artworkURL = ""
+  private var artworkTask: Task<Void, Never>?
+  private let imageContext = CIContext(options: [.cacheIntermediates: false])
   private var title = ""
   private var artist = ""
   private var previousLyric = ""
@@ -47,7 +54,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   override init() {
     super.init()
-    displayLayer.videoGravity = .resizeAspect
+    displayLayer.videoGravity = .resizeAspectFill
     guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
     let source = AVPictureInPictureController.ContentSource(
       sampleBufferDisplayLayer: displayLayer,
@@ -67,6 +74,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   deinit {
     renderTimer?.invalidate()
     pictureInPicturePossibleObservation?.invalidate()
+    artworkTask?.cancel()
   }
 
   func attach(to container: UIView) {
@@ -76,7 +84,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     }
     hostView.isUserInteractionEnabled = false
     hostView.backgroundColor = .clear
-    hostView.frame = CGRect(x: 0, y: 0, width: 108, height: 32)
+    updateHostGeometry()
     if displayLayer.superlayer !== hostView.layer {
       displayLayer.removeFromSuperlayer()
       hostView.layer.addSublayer(displayLayer)
@@ -85,16 +93,21 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     installControlTimebase()
   }
 
-  func configure(_ next: Configuration) {
+  func configure(_ next: Configuration, importedBackgroundImage: UIImage?) {
     let wasEnabled = configuration.enabled
     let appearanceChanged = configuration != next
     let canvasSizeChanged = canvasWidth(for: configuration.widthScale) != canvasWidth(for: next.widthScale)
+      || canvasHeight(for: configuration.heightScale) != canvasHeight(for: next.heightScale)
+    let imageChanged = self.importedBackgroundImage !== importedBackgroundImage
     configuration = next
+    self.importedBackgroundImage = importedBackgroundImage
+    if next.background == "artwork" { loadArtworkIfNeeded() }
+    updateHostGeometry()
     if !next.enabled {
       stop()
       return
     }
-    if !wasEnabled || appearanceChanged { userDismissed = false }
+    if !wasEnabled || appearanceChanged || imageChanged { userDismissed = false }
     if canvasSizeChanged, pictureInPictureController?.isPictureInPictureActive == true {
       programmaticStopPending = true
       pictureInPictureController?.stopPictureInPicture()
@@ -106,6 +119,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   func update(
     title: String,
     artist: String,
+    artworkURL: String,
     lines: [EchoNativeMetadataService.LyricLine],
     activeIndex: Int,
     isPlaying: Bool,
@@ -114,6 +128,13 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   ) {
     self.title = title
     self.artist = artist
+    if self.artworkURL != artworkURL {
+      self.artworkURL = artworkURL
+      artworkImage = nil
+      artworkTask?.cancel()
+      artworkTask = nil
+      loadArtworkIfNeeded()
+    }
     self.isPlaying = isPlaying
     self.durationMs = durationMs
     self.positionMs = positionMs
@@ -212,7 +233,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     guard hasContent, let sampleBuffer = makeSampleBuffer() else { return }
     if displayLayer.status == .failed {
       pictureInPictureController?.invalidatePlaybackState()
-      displayLayer.flush()
+      displayLayer.flushAndRemoveImage()
     }
     displayLayer.enqueue(sampleBuffer)
     frameIndex &+= 1
@@ -220,11 +241,12 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private func makeSampleBuffer() -> CMSampleBuffer? {
     let width = canvasWidth(for: configuration.widthScale)
-    let height = 540
+    let height = canvasHeight(for: configuration.heightScale)
     var pixelBuffer: CVPixelBuffer?
     let attributes: [String: Any] = [
       kCVPixelBufferCGImageCompatibilityKey as String: true,
       kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
+      kCVPixelBufferIOSurfacePropertiesKey as String: [:],
     ]
     guard CVPixelBufferCreate(
       kCFAllocatorDefault,
@@ -263,6 +285,16 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       sampleTiming: &timing,
       sampleBufferOut: &sampleBuffer
     ) == noErr else { return nil }
+    if let sampleBuffer,
+      let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: true),
+      CFArrayGetCount(attachments) > 0 {
+      let attachment = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+      CFDictionarySetValue(
+        attachment,
+        Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+        Unmanaged.passUnretained(kCFBooleanTrue).toOpaque()
+      )
+    }
     return sampleBuffer
   }
 
@@ -296,17 +328,21 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       ? (configuration.animation == "flow" ? CGFloat(phase * 4) : CGFloat((1 - transitionProgress) * 12))
       : 0
     let motionScale = animated && configuration.animation == "pulse" ? CGFloat(1 + phase * 0.012) : 1
-    let panel = CGRect(x: 54, y: panelY(height: height) + motionOffset, width: CGFloat(width - 108), height: 244)
-
-    // PiP video frames are opaque; leaving the pixel buffer transparent renders as black.
-    context.setFillColor(backgroundColor.withAlphaComponent(1).cgColor)
-    context.fill(bounds)
+    drawBackground(in: context, bounds: bounds)
+    let horizontalInset = min(54, max(18, CGFloat(width) * 0.055))
+    let panelHeight = min(244, max(140, CGFloat(height) - 28))
+    let panel = CGRect(
+      x: horizontalInset,
+      y: panelY(height: height, panelHeight: panelHeight) + motionOffset,
+      width: max(40, CGFloat(width) - horizontalInset * 2),
+      height: panelHeight
+    )
 
     context.saveGState()
     context.translateBy(x: bounds.midX, y: panel.midY)
     context.scaleBy(x: motionScale, y: motionScale)
     context.translateBy(x: -bounds.midX, y: -panel.midY)
-    context.setFillColor(backgroundColor.cgColor)
+    context.setFillColor(panelColor.cgColor)
     context.addPath(CGPath(roundedRect: panel, cornerWidth: 34, cornerHeight: 34, transform: nil))
     context.fillPath()
 
@@ -332,39 +368,105 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.saveGState()
     context.translateBy(x: 0, y: CGFloat(height))
     context.scaleBy(x: 1, y: -1)
-    let textPanel = CGRect(x: panel.minX + 32, y: CGFloat(height) - panel.maxY + 24, width: panel.width - 64, height: panel.height - 38)
+    let textPanel = CGRect(x: panel.minX + 24, y: CGFloat(height) - panel.maxY + 18, width: panel.width - 48, height: panel.height - 30)
     var textY = textPanel.minY
     if configuration.showMetadata && !currentLyric.isEmpty {
       let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  ·  ")
       if !metadata.isEmpty {
         drawText(metadata, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 28), font: .systemFont(ofSize: 18, weight: .semibold), color: .white.withAlphaComponent(0.58), context: context)
-        textY += 34
+        textY += 30
       }
     }
-    if !previousLyric.isEmpty {
+    let showPreviousLyric = panel.height >= 220
+    if showPreviousLyric, !previousLyric.isEmpty {
       drawText(previousLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
       textY += 34
     }
     let currentText = currentLyric.isEmpty ? title : currentLyric
+    let nextTextHeight: CGFloat = nextLyric.isEmpty ? 0 : 34
+    let currentTextHeight = max(54, min(86, textPanel.maxY - textY - nextTextHeight))
     if configuration.timedReveal, !currentLyric.isEmpty {
-      drawTimedText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 86), progress: lyricProgress, alpha: animated ? transitionProgress : 1, font: .systemFont(ofSize: fontSize, weight: .bold), context: context)
+      drawTimedText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: currentTextHeight), progress: lyricProgress, alpha: animated ? transitionProgress : 1, font: .systemFont(ofSize: fontSize, weight: .bold), context: context)
     } else {
-      drawText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 86), font: .systemFont(ofSize: fontSize, weight: .bold), color: .white.withAlphaComponent(animated ? transitionProgress : 1), context: context)
+      drawText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: currentTextHeight), font: .systemFont(ofSize: fontSize, weight: .bold), color: .white.withAlphaComponent(animated ? transitionProgress : 1), context: context)
     }
-    textY += 92
+    textY += currentTextHeight + 6
     if !nextLyric.isEmpty {
       drawText(nextLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
     }
     context.restoreGState()
   }
 
-  private var backgroundColor: UIColor {
-    let alpha = CGFloat(max(0.2, min(0.95, configuration.opacity)))
+  private var panelColor: UIColor {
     switch configuration.style {
-    case "minimal": return UIColor.black.withAlphaComponent(alpha * 0.38)
-    case "solid": return UIColor.black.withAlphaComponent(alpha)
-    default: return UIColor(red: 0.08, green: 0.07, blue: 0.11, alpha: alpha)
+    case "minimal": return UIColor.black.withAlphaComponent(0.28)
+    case "solid": return UIColor.black.withAlphaComponent(0.88)
+    default: return UIColor(red: 0.08, green: 0.07, blue: 0.11, alpha: 0.58)
     }
+  }
+
+  private func loadArtworkIfNeeded() {
+    guard configuration.background == "artwork", artworkImage == nil, !artworkURL.isEmpty, artworkTask == nil,
+      let url = URL(string: artworkURL) else { return }
+    let expectedURL = artworkURL
+    artworkTask = Task { [weak self] in
+      let data: Data?
+      if url.isFileURL {
+        data = try? Data(contentsOf: url)
+      } else {
+        data = try? await URLSession.shared.data(from: url).0
+      }
+      guard !Task.isCancelled else { return }
+      let image = data.flatMap(UIImage.init(data:)).flatMap { self?.blurredImage($0) }
+      guard let self, self.artworkURL == expectedURL else { return }
+      self.artworkImage = image
+      self.artworkTask = nil
+      self.renderFrame()
+    }
+  }
+
+  private func blurredImage(_ image: UIImage) -> UIImage? {
+    guard let input = CIImage(image: image) else { return image }
+    let filter = CIFilter.gaussianBlur()
+    filter.inputImage = input.clampedToExtent()
+    filter.radius = 28
+    guard let output = filter.outputImage?.cropped(to: input.extent),
+      let cgImage = imageContext.createCGImage(output, from: input.extent)
+    else { return image }
+    return UIImage(cgImage: cgImage)
+  }
+
+  private func drawBackground(in context: CGContext, bounds: CGRect) {
+    if configuration.background == "custom", let image = importedBackgroundImage?.cgImage {
+      drawAspectFill(image, in: bounds, context: context)
+      context.setFillColor(UIColor.black.withAlphaComponent(0.2).cgColor)
+      context.fill(bounds)
+      return
+    }
+    if configuration.background == "artwork", let image = artworkImage?.cgImage {
+      drawAspectFill(image, in: bounds, context: context)
+      context.setFillColor(UIColor.black.withAlphaComponent(0.26).cgColor)
+      context.fill(bounds)
+      return
+    }
+    let gradient = CGGradient(
+      colorsSpace: CGColorSpaceCreateDeviceRGB(),
+      colors: [
+        UIColor(red: 0.11, green: 0.04, blue: 0.08, alpha: 1).cgColor,
+        UIColor(red: 0.46, green: 0.06, blue: 0.09, alpha: 1).cgColor,
+      ] as CFArray,
+      locations: [0, 1]
+    )
+    if let gradient {
+      context.drawLinearGradient(gradient, start: CGPoint(x: bounds.minX, y: bounds.minY), end: CGPoint(x: bounds.maxX, y: bounds.maxY), options: [])
+    }
+  }
+
+  private func drawAspectFill(_ image: CGImage, in bounds: CGRect, context: CGContext) {
+    let imageSize = CGSize(width: image.width, height: image.height)
+    let scale = max(bounds.width / imageSize.width, bounds.height / imageSize.height)
+    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+    context.draw(image, in: CGRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2, width: size.width, height: size.height))
   }
 
   private var fontSize: CGFloat {
@@ -378,17 +480,31 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     return max(0, min(1, (positionMs - currentLineStartMs) / (end - currentLineStartMs)))
   }
 
-  private func panelY(height: Int) -> CGFloat {
+  private func panelY(height: Int, panelHeight: CGFloat) -> CGFloat {
+    let inset = max(14, min(34, (CGFloat(height) - panelHeight) / 2))
     switch configuration.position {
-    case "top": return 34
-    case "center": return CGFloat(height / 2 - 122)
-    default: return CGFloat(height - 278)
+    case "top": return inset
+    case "center": return CGFloat(height) / 2 - panelHeight / 2
+    default: return CGFloat(height) - panelHeight - inset
     }
   }
 
   private func canvasWidth(for scale: Double) -> Int {
     let clamped = max(0.2, min(1.0, scale))
     return max(192, min(960, Int((960 * clamped).rounded()) / 2 * 2))
+  }
+
+  private func canvasHeight(for scale: Double) -> Int {
+    let clamped = max(0.33, min(1.0, scale))
+    return max(180, min(540, Int((540 * clamped).rounded()) / 2 * 2))
+  }
+
+  private func updateHostGeometry() {
+    let width = CGFloat(canvasWidth(for: configuration.widthScale))
+    let height = CGFloat(canvasHeight(for: configuration.heightScale))
+    let hostHeight: CGFloat = 36
+    hostView.frame = CGRect(x: 0, y: 0, width: hostHeight * width / height, height: hostHeight)
+    displayLayer.frame = hostView.bounds
   }
 
   private func drawText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor, context: CGContext) {

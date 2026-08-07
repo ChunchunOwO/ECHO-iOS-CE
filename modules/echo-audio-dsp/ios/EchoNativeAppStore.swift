@@ -77,6 +77,7 @@ final class EchoNativeAppStore {
 
   private let audioEngine = DspPlaybackEngine()
   private let desktopLyricsController = EchoNativeDesktopLyricsController()
+  private var desktopLyricsBackgroundImage: UIImage?
   private var dacProfiles = EchoNativeDacObservation.load()
   private var lastDacObservationKey = ""
   private var signalPathVisible = false
@@ -128,6 +129,7 @@ final class EchoNativeAppStore {
   func start() {
     guard !started else { return }
     started = true
+    desktopLyricsBackgroundImage = loadDesktopLyricsBackgroundImage()
     applySettings()
     configureClients()
     startProgressClock()
@@ -429,6 +431,7 @@ final class EchoNativeAppStore {
     case "streamingPlaylistPin": toggleStreamingPlaylist(payload, pinned: true)
     case "streamingPlaylistFavorite": toggleStreamingPlaylist(payload, pinned: false)
     case "streamingConnect": connectMode = "streaming"; playerModel.activePage = "connect"; renderPages()
+    case "desktopLyricsBackgroundImage": importDesktopLyricsBackground(payload["data"] as? Data)
     case "settingToggle": updateSettingToggle(payload)
     case "settingSelect": updateSettingSelection(payload)
     case "settingNumber": updateSettingNumber(payload)
@@ -1950,7 +1953,7 @@ final class EchoNativeAppStore {
       configureClients()
     case "manualAppearance": persistent.settings.darkModeEnabled = selection == "dark"; playerModel.darkModeEnabled = selection == "dark"
     case "desktopLyricsAnimation": persistent.settings.desktopLyricsAnimation = selection
-    case "desktopLyricsOpacity": persistent.settings.desktopLyricsOpacity = selection
+    case "desktopLyricsBackground": persistent.settings.desktopLyricsBackground = selection
     case "desktopLyricsPosition": persistent.settings.desktopLyricsPosition = selection
     case "desktopLyricsSize": persistent.settings.desktopLyricsSize = selection
     case "desktopLyricsStyle": persistent.settings.desktopLyricsStyle = selection
@@ -1963,9 +1966,9 @@ final class EchoNativeAppStore {
   private func updateSettingNumber(_ payload: [String: Any]) {
     guard let key = payload["key"] as? String, let value = number(payload["value"]) else { return }
     switch key {
-    case "desktopLyricsOpacity": persistent.settings.desktopLyricsOpacityValue = max(0.2, min(0.95, value))
     case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(18, min(34, value))
     case "desktopLyricsWidth": persistent.settings.desktopLyricsWidthScale = max(0.2, min(1.0, value))
+    case "desktopLyricsHeight": persistent.settings.desktopLyricsHeightScale = max(0.33, min(1.0, value))
     default: return
     }
     configureDesktopLyrics()
@@ -2778,9 +2781,10 @@ final class EchoNativeAppStore {
     let settings = persistent.settings
     desktopLyricsController.configure(.init(
       animation: settings.desktopLyricsAnimation,
+      background: settings.desktopLyricsBackground,
       enabled: settings.desktopLyricsEnabled,
       fontSize: settings.desktopLyricsFontSize,
-      opacity: settings.desktopLyricsOpacityValue,
+      heightScale: settings.desktopLyricsHeightScale,
       onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
       position: settings.desktopLyricsPosition,
       showMetadata: settings.desktopLyricsShowMetadata,
@@ -2788,7 +2792,7 @@ final class EchoNativeAppStore {
       timedReveal: settings.desktopLyricsTimedReveal,
       transitionAnimation: settings.desktopLyricsTransitionAnimation,
       widthScale: settings.desktopLyricsWidthScale
-    ))
+    ), importedBackgroundImage: desktopLyricsBackgroundImage)
     updateDesktopLyrics()
   }
 
@@ -2796,12 +2800,42 @@ final class EchoNativeAppStore {
     desktopLyricsController.update(
       title: playerModel.title,
       artist: playerModel.artist,
+      artworkURL: playerModel.artworkUrl,
       lines: playerModel.lyricLines,
       activeIndex: playerModel.activeLyricIndex,
       isPlaying: playerModel.isPlaying,
       durationMs: playerModel.durationMs,
       positionMs: playerModel.positionMs
     )
+  }
+
+  private var desktopLyricsBackgroundURL: URL? {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+      .appendingPathComponent("desktop-lyrics-background.jpg")
+  }
+
+  private func loadDesktopLyricsBackgroundImage() -> UIImage? {
+    desktopLyricsBackgroundURL.flatMap { try? Data(contentsOf: $0) }.flatMap(UIImage.init(data:))
+  }
+
+  private func importDesktopLyricsBackground(_ data: Data?) {
+    guard let data, let image = UIImage(data: data), let url = desktopLyricsBackgroundURL else {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = localized("The selected image could not be read.", "无法读取所选图片。")
+      return
+    }
+    do {
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try data.write(to: url, options: .atomic)
+      desktopLyricsBackgroundImage = image
+      persistent.settings.desktopLyricsBackground = "custom"
+      configureDesktopLyrics()
+      persist()
+      renderPages()
+    } catch {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = error.localizedDescription
+    }
   }
 
   private func persist() { EchoNativePersistence.save(persistent) }

@@ -686,6 +686,10 @@ extension EchoNativeAppStore {
       toggle("desktopLyricsEnabled", localized("Enable desktop lyrics", "启用桌面歌词"), localized("Show lyrics in a floating Picture in Picture window over other apps.", "通过悬浮的画中画窗口在其他应用上方显示歌词。"), settings.desktopLyricsEnabled),
       toggle("desktopLyricsOnlyWhilePlaying", localized("Only while playing", "仅播放时显示"), localized("Hide the overlay when playback is paused.", "暂停播放时隐藏浮层。"), settings.desktopLyricsOnlyWhilePlaying, disabled: !settings.desktopLyricsEnabled),
       toggle("desktopLyricsShowMetadata", localized("Show track details", "显示歌曲信息"), localized("Include title and artist above the lyric.", "在歌词上方显示标题和艺术家。"), settings.desktopLyricsShowMetadata, disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsBackground", localized("Background", "背景"), localized("Use the ECHO theme, the current artwork with blur, or an imported image.", "使用 ECHO 主题色、模糊歌曲封面或导入图片。"), settings.desktopLyricsBackground, [
+        option("theme", localized("Theme", "主题色")), option("artwork", localized("Artwork glass", "封面玻璃")), option("custom", localized("Imported image", "导入图片")),
+      ], disabled: !settings.desktopLyricsEnabled),
+      action("desktopLyricsImportBackground", localized("Import background image", "导入背景图片"), localized("Choose and crop an image for the desktop lyric background.", "选择并裁剪桌面歌词背景图片。"), disabled: !settings.desktopLyricsEnabled || settings.desktopLyricsBackground != "custom"),
       picker("desktopLyricsStyle", localized("Surface style", "表面样式"), localized("Choose the visual treatment of the floating layer.", "选择浮层的视觉样式。"), settings.desktopLyricsStyle, [
         option("glass", localized("Glass", "玻璃")), option("solid", localized("Solid", "纯色")), option("minimal", localized("Minimal", "极简")),
       ], disabled: !settings.desktopLyricsEnabled),
@@ -696,10 +700,10 @@ extension EchoNativeAppStore {
       toggle("desktopLyricsTimedReveal", localized("Timed glow", "按时间逐字发光"), localized("Reveal and glow characters across the lyric time span.", "按照歌词时间段平均逐字显示并发光。"), settings.desktopLyricsTimedReveal, disabled: !settings.desktopLyricsEnabled),
       slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsFontSize, min: 18, max: 34, step: 1, disabled: !settings.desktopLyricsEnabled),
       slider("desktopLyricsWidth", localized("PiP width", "画中画宽度"), localized("Adjust the floating window width.", "调整悬浮画中画窗口的宽度。"), settings.desktopLyricsWidthScale, min: 0.2, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsHeight", localized("PiP height", "画中画长度"), localized("Adjust the floating window length vertically.", "调整悬浮画中画窗口的纵向长度。"), settings.desktopLyricsHeightScale, min: 0.33, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place lyrics at the top, center, or bottom of the Picture in Picture window.", "将歌词放在画中画窗口的顶部、中央或底部。"), settings.desktopLyricsPosition, [
         option("top", localized("Top", "顶部")), option("center", localized("Center", "居中")), option("bottom", localized("Bottom", "底部")),
       ], disabled: !settings.desktopLyricsEnabled),
-      slider("desktopLyricsOpacity", localized("Background opacity", "背景透明度"), localized("Control the Picture in Picture background opacity.", "控制画中画窗口背景的透明程度。"), settings.desktopLyricsOpacityValue, min: 0.2, max: 0.95, step: 0.01, disabled: !settings.desktopLyricsEnabled),
     ])
     let sections: [[String: Any]] = [
       section("interface", localized("Interface", "界面"), localized("Language and appearance", "语言与外观"), "paintbrush", [
@@ -808,7 +812,7 @@ extension EchoNativeAppStore {
     disabled: Bool = false
   ) -> [String: Any] {
     let label: String
-    if id == "desktopLyricsOpacity" || id == "desktopLyricsWidth" {
+    if id == "desktopLyricsWidth" || id == "desktopLyricsHeight" {
       label = "\(Int((value * 100).rounded()))%"
     } else {
       label = "\(Int(value.rounded())) pt"
