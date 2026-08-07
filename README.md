@@ -2,7 +2,7 @@
   <img src="docs/app-icon.png" width="96" alt="ECHO iPhone app icon" />
 </p>
 
-<h1 align="center">ECHO iPhone</h1>
+<h1 align="center">ECHO iPhone Community Edition</h1>
 
 <p align="center">
   一款面向 iPhone 的独立音乐播放器，支持连接 <a href="https://github.com/Moekotori/ECHO">ECHO NEXT</a> EchoLink
