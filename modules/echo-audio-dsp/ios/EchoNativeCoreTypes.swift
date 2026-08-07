@@ -219,7 +219,6 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var desktopLyricsPosition = "bottom"
   var desktopLyricsShowMetadata = true
   var desktopLyricsSize = "medium"
-  var desktopLyricsStyle = "glass"
   var desktopLyricsTimedReveal = false
   var desktopLyricsTransitionAnimation = false
   var desktopLyricsWidthScale = 1.0
@@ -281,7 +280,6 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     let decodedFontSize = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsFontSize)
       ?? (legacySize == "small" ? 20 : legacySize == "large" ? 32 : 26)
     desktopLyricsFontSize = max(18, min(34, decodedFontSize))
-    desktopLyricsStyle = try values.decodeIfPresent(String.self, forKey: .desktopLyricsStyle) ?? "glass"
     desktopLyricsTimedReveal = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTimedReveal) ?? false
     desktopLyricsTransitionAnimation = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTransitionAnimation) ?? false
     let decodedWidthScale = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsWidthScale)

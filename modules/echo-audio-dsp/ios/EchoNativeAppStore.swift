@@ -1956,7 +1956,6 @@ final class EchoNativeAppStore {
     case "desktopLyricsBackground": persistent.settings.desktopLyricsBackground = selection
     case "desktopLyricsPosition": persistent.settings.desktopLyricsPosition = selection
     case "desktopLyricsSize": persistent.settings.desktopLyricsSize = selection
-    case "desktopLyricsStyle": persistent.settings.desktopLyricsStyle = selection
     default: break
     }
     configureDesktopLyrics()
@@ -2788,7 +2787,6 @@ final class EchoNativeAppStore {
       onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
       position: settings.desktopLyricsPosition,
       showMetadata: settings.desktopLyricsShowMetadata,
-      style: settings.desktopLyricsStyle,
       timedReveal: settings.desktopLyricsTimedReveal,
       transitionAnimation: settings.desktopLyricsTransitionAnimation,
       widthScale: settings.desktopLyricsWidthScale

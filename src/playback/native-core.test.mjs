@@ -201,6 +201,14 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /canvasWidth\(for: configuration\.widthScale\)/u);
   assert.match(desktopLyrics, /canvasHeight\(for: configuration\.heightScale\)/u);
   assert.match(desktopLyrics, /CIFilter\.gaussianBlur\(\)/u);
+  assert.match(desktopLyrics, /withTimeInterval: 1\.0 \/ 30\.0/u);
+  assert.match(desktopLyrics, /timescale: 30/u);
+  assert.match(desktopLyrics, /previousLyric = currentLyric/u);
+  assert.match(desktopLyrics, /drawCover\(in: cover/u);
+  assert.match(desktopLyrics, /artworkBackgroundImage/u);
+  assert.match(desktopLyrics, /positionUpdatedAt/u);
+  assert.doesNotMatch(desktopLyrics, /NSShadow|panelColor|motionOffset/u);
+  assert.match(metadata, /\.joined\(separator: "\\n"\)/u);
   assert.match(store, /attachDesktopLyrics\(to view: UIView\)/u);
   assert.match(store, /desktopLyricsController\.configure/u);
   assert.match(store, /desktopLyricsController\.update/u);
@@ -214,6 +222,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(payload, /action\("desktopLyricsImportBackground"/u);
   assert.match(payload, /toggle\("desktopLyricsTransitionAnimation"/u);
   assert.match(payload, /toggle\("desktopLyricsTimedReveal"/u);
+  assert.doesNotMatch(payload, /desktopLyricsStyle/u);
+  assert.match(payload, /Change characters from gray to white/u);
   assert.doesNotMatch(payload, /slider\("desktopLyricsOpacity"/u);
   assert.match(pages, /photosPicker\(/u);
   assert.match(store, /case "desktopLyricsBackgroundImage"/u);

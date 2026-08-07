@@ -18,7 +18,6 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     var onlyWhilePlaying = true
     var position = "bottom"
     var showMetadata = true
-    var style = "glass"
     var timedReveal = false
     var transitionAnimation = false
     var widthScale = 1.0
@@ -32,6 +31,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private var configuration = Configuration()
   private var importedBackgroundImage: UIImage?
   private var artworkImage: UIImage?
+  private var artworkBackgroundImage: UIImage?
   private var artworkURL = ""
   private var artworkTask: Task<Void, Never>?
   private let imageContext = CIContext(options: [.cacheIntermediates: false])
@@ -39,14 +39,13 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private var artist = ""
   private var previousLyric = ""
   private var currentLyric = ""
-  private var nextLyric = ""
   private var activeLyricIndex = 0
   private var currentLineStartMs = -1.0
   private var nextLineStartMs = -1.0
   private var positionMs = 0.0
+  private var positionUpdatedAt = CACurrentMediaTime()
   private var isPlaying = false
   private var durationMs = 0.0
-  private var frameIndex: Int64 = 0
   private var userDismissed = false
   private var programmaticStopPending = false
   private var startRequested = false
@@ -131,6 +130,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     if self.artworkURL != artworkURL {
       self.artworkURL = artworkURL
       artworkImage = nil
+      artworkBackgroundImage = nil
       artworkTask?.cancel()
       artworkTask = nil
       loadArtworkIfNeeded()
@@ -138,13 +138,13 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     self.isPlaying = isPlaying
     self.durationMs = durationMs
     self.positionMs = positionMs
+    positionUpdatedAt = CACurrentMediaTime()
     if activeLyricIndex != activeIndex {
+      previousLyric = currentLyric
       activeLyricIndex = activeIndex
       lyricTransitionStartedAt = CACurrentMediaTime()
     }
-    previousLyric = activeIndex > 0 && lines.indices.contains(activeIndex - 1) ? lines[activeIndex - 1].text : ""
     currentLyric = lines.indices.contains(activeIndex) ? lines[activeIndex].text : ""
-    nextLyric = lines.indices.contains(activeIndex + 1) ? lines[activeIndex + 1].text : ""
     currentLineStartMs = lines.indices.contains(activeIndex) ? lines[activeIndex].milliseconds : -1
     nextLineStartMs = lines.dropFirst(max(0, activeIndex + 1)).first(where: { $0.milliseconds >= 0 })?.milliseconds ?? -1
 
@@ -224,7 +224,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private func startRenderTimer() {
     guard renderTimer == nil else { return }
-    renderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
+    renderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.refreshPresentation() }
     }
   }
@@ -236,7 +236,6 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       displayLayer.flushAndRemoveImage()
     }
     displayLayer.enqueue(sampleBuffer)
-    frameIndex &+= 1
   }
 
   private func makeSampleBuffer() -> CMSampleBuffer? {
@@ -273,7 +272,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     else { return nil }
 
     var timing = CMSampleTimingInfo(
-      duration: CMTime(value: 1, timescale: 15),
+      duration: CMTime(value: 1, timescale: 30),
       presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
       decodeTimeStamp: .invalid
     )
@@ -321,92 +320,120 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private func drawFrame(in context: CGContext, width: Int, height: Int) {
     let bounds = CGRect(x: 0, y: 0, width: width, height: height)
-    let phase = sin(Double(frameIndex) * 0.12)
     let transitionProgress = min(1, max(0, (CACurrentMediaTime() - lyricTransitionStartedAt) / 0.28))
-    let animated = configuration.transitionAnimation
-    let motionOffset = animated
-      ? (configuration.animation == "flow" ? CGFloat(phase * 4) : CGFloat((1 - transitionProgress) * 12))
-      : 0
-    let motionScale = animated && configuration.animation == "pulse" ? CGFloat(1 + phase * 0.012) : 1
     drawBackground(in: context, bounds: bounds)
-    let horizontalInset = min(54, max(18, CGFloat(width) * 0.055))
-    let panelHeight = min(244, max(140, CGFloat(height) - 28))
-    let panel = CGRect(
-      x: horizontalInset,
-      y: panelY(height: height, panelHeight: panelHeight) + motionOffset,
-      width: max(40, CGFloat(width) - horizontalInset * 2),
-      height: panelHeight
+    let inset = max(18, min(52, CGFloat(width) * 0.055))
+    let coverSize = max(64, min(CGFloat(height) - inset * 2, CGFloat(width) * 0.38))
+    let gap = max(18, min(36, CGFloat(width) * 0.035))
+    let contentY = contentY(height: height, contentHeight: coverSize)
+    let cover = CGRect(x: inset, y: contentY, width: coverSize, height: coverSize)
+    let text = CGRect(
+      x: cover.maxX + gap,
+      y: contentY,
+      width: max(40, CGFloat(width) - cover.maxX - gap - inset),
+      height: coverSize
     )
-
-    context.saveGState()
-    context.translateBy(x: bounds.midX, y: panel.midY)
-    context.scaleBy(x: motionScale, y: motionScale)
-    context.translateBy(x: -bounds.midX, y: -panel.midY)
-    context.setFillColor(panelColor.cgColor)
-    context.addPath(CGPath(roundedRect: panel, cornerWidth: 34, cornerHeight: 34, transform: nil))
-    context.fillPath()
-
-    if configuration.style == "glass" {
-      let gradient = CGGradient(
-        colorsSpace: CGColorSpaceCreateDeviceRGB(),
-        colors: [UIColor.white.withAlphaComponent(0.16).cgColor, UIColor.systemPink.withAlphaComponent(0.06).cgColor] as CFArray,
-        locations: [0, 1]
-      )
-      if let gradient {
-        context.saveGState()
-        context.addPath(CGPath(roundedRect: panel, cornerWidth: 34, cornerHeight: 34, transform: nil))
-        context.clip()
-        context.drawLinearGradient(gradient, start: CGPoint(x: panel.minX, y: panel.minY), end: CGPoint(x: panel.maxX, y: panel.maxY), options: [])
-        context.restoreGState()
-      }
-    }
-
-    context.setFillColor(UIColor.systemPink.withAlphaComponent(0.8).cgColor)
-    context.fill(CGRect(x: panel.minX + 32, y: panel.maxY - 12, width: panel.width - 64, height: 3))
-    context.restoreGState()
+    drawCover(in: cover, context: context)
 
     context.saveGState()
     context.translateBy(x: 0, y: CGFloat(height))
     context.scaleBy(x: 1, y: -1)
-    let textPanel = CGRect(x: panel.minX + 24, y: CGFloat(height) - panel.maxY + 18, width: panel.width - 48, height: panel.height - 30)
-    var textY = textPanel.minY
-    if configuration.showMetadata && !currentLyric.isEmpty {
-      let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  ·  ")
-      if !metadata.isEmpty {
-        drawText(metadata, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 28), font: .systemFont(ofSize: 18, weight: .semibold), color: .white.withAlphaComponent(0.58), context: context)
-        textY += 30
-      }
-    }
-    let showPreviousLyric = panel.height >= 220
-    if showPreviousLyric, !previousLyric.isEmpty {
-      drawText(previousLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
-      textY += 34
-    }
+    let textPanel = CGRect(x: text.minX, y: CGFloat(height) - text.maxY, width: text.width, height: text.height)
     let currentText = currentLyric.isEmpty ? title : currentLyric
-    let nextTextHeight: CGFloat = nextLyric.isEmpty ? 0 : 34
-    let currentTextHeight = max(54, min(86, textPanel.maxY - textY - nextTextHeight))
+    let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  /  ")
+    let metadataFont = UIFont.systemFont(ofSize: min(18, max(11, coverSize * 0.09)), weight: .semibold)
+    let metadataHeight: CGFloat = configuration.showMetadata && !metadata.isEmpty ? metadataFont.lineHeight + 4 : 0
+    let metadataGap: CGFloat = metadataHeight > 0 ? min(8, coverSize * 0.04) : 0
+    let availableLyricHeight = max(24, textPanel.height - metadataHeight - metadataGap)
+    let lyricLineCount = max(1, currentText.components(separatedBy: .newlines).count)
+    let lyricFontSize = min(fontSize, max(12, availableLyricHeight / (CGFloat(lyricLineCount) * 1.22)))
+    let lyricFont = UIFont.systemFont(ofSize: lyricFontSize, weight: .bold)
+    let lyricHeight = min(availableLyricHeight, lyricFont.lineHeight * CGFloat(lyricLineCount) + 12)
+    let groupHeight = metadataHeight + metadataGap + lyricHeight
+    let groupY = textPanel.midY - groupHeight / 2
+    if metadataHeight > 0 {
+      drawCenteredText(
+        metadata,
+        in: CGRect(x: textPanel.minX, y: groupY, width: textPanel.width, height: metadataHeight),
+        font: metadataFont,
+        color: .white.withAlphaComponent(0.68),
+        context: context
+      )
+    }
+    let lyricRect = CGRect(
+      x: textPanel.minX,
+      y: groupY + metadataHeight + metadataGap,
+      width: textPanel.width,
+      height: lyricHeight
+    )
+    let transitionDistance: CGFloat = configuration.transitionAnimation && configuration.animation == "flow" ? 18 : 0
+    let outgoingOffset = CGFloat(transitionProgress) * transitionDistance
+    let incomingOffset = CGFloat(1 - transitionProgress) * transitionDistance
+    if configuration.transitionAnimation, !previousLyric.isEmpty, transitionProgress < 1 {
+      let scale = configuration.animation == "pulse" ? CGFloat(1 - transitionProgress * 0.04) : 1
+      context.saveGState()
+      context.translateBy(x: lyricRect.midX, y: lyricRect.midY)
+      context.scaleBy(x: scale, y: scale)
+      context.translateBy(x: -lyricRect.midX, y: -lyricRect.midY)
+      drawCenteredText(
+        previousLyric,
+        in: lyricRect.offsetBy(dx: 0, dy: -outgoingOffset),
+        font: lyricFont,
+        color: .white.withAlphaComponent(1 - transitionProgress),
+        context: context
+      )
+      context.restoreGState()
+    }
+    let lyricAlpha = configuration.transitionAnimation ? transitionProgress : 1
+    let incomingScale = configuration.transitionAnimation && configuration.animation == "pulse"
+      ? CGFloat(0.96 + transitionProgress * 0.04)
+      : 1
+    context.saveGState()
+    context.translateBy(x: lyricRect.midX, y: lyricRect.midY)
+    context.scaleBy(x: incomingScale, y: incomingScale)
+    context.translateBy(x: -lyricRect.midX, y: -lyricRect.midY)
     if configuration.timedReveal, !currentLyric.isEmpty {
-      drawTimedText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: currentTextHeight), progress: lyricProgress, alpha: animated ? transitionProgress : 1, font: .systemFont(ofSize: fontSize, weight: .bold), context: context)
+      drawTimedText(
+        currentText,
+        in: lyricRect.offsetBy(dx: 0, dy: incomingOffset),
+        progress: lyricProgress,
+        alpha: lyricAlpha,
+        font: lyricFont,
+        context: context
+      )
     } else {
-      drawText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: currentTextHeight), font: .systemFont(ofSize: fontSize, weight: .bold), color: .white.withAlphaComponent(animated ? transitionProgress : 1), context: context)
+      drawCenteredText(
+        currentText,
+        in: lyricRect.offsetBy(dx: 0, dy: incomingOffset),
+        font: lyricFont,
+        color: .white.withAlphaComponent(lyricAlpha),
+        context: context
+      )
     }
-    textY += currentTextHeight + 6
-    if !nextLyric.isEmpty {
-      drawText(nextLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
-    }
+    context.restoreGState()
     context.restoreGState()
   }
 
-  private var panelColor: UIColor {
-    switch configuration.style {
-    case "minimal": return UIColor.black.withAlphaComponent(0.28)
-    case "solid": return UIColor.black.withAlphaComponent(0.88)
-    default: return UIColor(red: 0.08, green: 0.07, blue: 0.11, alpha: 0.58)
+  private func drawCover(in rect: CGRect, context: CGContext) {
+    let radius = min(24, rect.width * 0.12)
+    context.saveGState()
+    context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+    context.clip()
+    if let image = artworkImage?.cgImage {
+      drawAspectFill(image, in: rect, context: context)
+    } else {
+      context.setFillColor(UIColor.black.withAlphaComponent(0.34).cgColor)
+      context.fill(rect)
     }
+    context.restoreGState()
+    context.setStrokeColor(UIColor.white.withAlphaComponent(0.2).cgColor)
+    context.setLineWidth(1)
+    context.addPath(CGPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), cornerWidth: radius, cornerHeight: radius, transform: nil))
+    context.strokePath()
   }
 
   private func loadArtworkIfNeeded() {
-    guard configuration.background == "artwork", artworkImage == nil, !artworkURL.isEmpty, artworkTask == nil,
+    guard artworkImage == nil, !artworkURL.isEmpty, artworkTask == nil,
       let url = URL(string: artworkURL) else { return }
     let expectedURL = artworkURL
     artworkTask = Task { [weak self] in
@@ -417,9 +444,10 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
         data = try? await URLSession.shared.data(from: url).0
       }
       guard !Task.isCancelled else { return }
-      let image = data.flatMap(UIImage.init(data:)).flatMap { self?.blurredImage($0) }
       guard let self, self.artworkURL == expectedURL else { return }
+      let image = data.flatMap(UIImage.init(data:))
       self.artworkImage = image
+      self.artworkBackgroundImage = image.flatMap(self.blurredImage)
       self.artworkTask = nil
       self.renderFrame()
     }
@@ -443,7 +471,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       context.fill(bounds)
       return
     }
-    if configuration.background == "artwork", let image = artworkImage?.cgImage {
+    if configuration.background == "artwork", let image = artworkBackgroundImage?.cgImage {
       drawAspectFill(image, in: bounds, context: context)
       context.setFillColor(UIColor.black.withAlphaComponent(0.26).cgColor)
       context.fill(bounds)
@@ -477,15 +505,27 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     guard currentLineStartMs >= 0 else { return 1 }
     let end = nextLineStartMs > currentLineStartMs ? nextLineStartMs : durationMs
     guard end > currentLineStartMs else { return 1 }
-    return max(0, min(1, (positionMs - currentLineStartMs) / (end - currentLineStartMs)))
+    let interpolatedPosition = min(durationMs, positionMs + (isPlaying ? (CACurrentMediaTime() - positionUpdatedAt) * 1000 : 0))
+    return max(0, min(1, (interpolatedPosition - currentLineStartMs) / (end - currentLineStartMs)))
   }
 
-  private func panelY(height: Int, panelHeight: CGFloat) -> CGFloat {
-    let inset = max(14, min(34, (CGFloat(height) - panelHeight) / 2))
+  private func drawCenteredText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor, context: CGContext) {
+    let measured = (text as NSString).boundingRect(
+      with: CGSize(width: rect.width, height: CGFloat.greatestFiniteMagnitude),
+      options: [.usesLineFragmentOrigin, .usesFontLeading],
+      attributes: [.font: font],
+      context: nil
+    )
+    let height = min(rect.height, max(font.lineHeight, measured.height))
+    drawText(text, in: CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height), font: font, color: color, context: context)
+  }
+
+  private func contentY(height: Int, contentHeight: CGFloat) -> CGFloat {
+    let inset = max(14, min(34, (CGFloat(height) - contentHeight) / 2))
     switch configuration.position {
     case "top": return inset
-    case "center": return CGFloat(height) / 2 - panelHeight / 2
-    default: return CGFloat(height) - panelHeight - inset
+    case "center": return CGFloat(height) / 2 - contentHeight / 2
+    default: return CGFloat(height) - contentHeight - inset
     }
   }
 
@@ -529,21 +569,23 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     paragraph.lineBreakMode = .byTruncatingTail
     let attributed = NSMutableAttributedString(string: text, attributes: [
       .font: font,
-      .foregroundColor: UIColor.white.withAlphaComponent(0.24 * alpha),
+      .foregroundColor: UIColor(white: 0.52, alpha: alpha),
       .paragraphStyle: paragraph,
     ])
     if prefixLength > 0 {
-      let shadow = NSShadow()
-      shadow.shadowColor = UIColor.systemPink.withAlphaComponent(0.9 * alpha)
-      shadow.shadowBlurRadius = 10
       attributed.addAttributes([
         .foregroundColor: UIColor.white.withAlphaComponent(alpha),
-        .shadow: shadow,
       ], range: NSRange(location: 0, length: prefixLength))
     }
+    let measured = attributed.boundingRect(
+      with: CGSize(width: rect.width, height: CGFloat.greatestFiniteMagnitude),
+      options: [.usesLineFragmentOrigin, .usesFontLeading],
+      context: nil
+    )
+    let height = min(rect.height, max(font.lineHeight, measured.height))
     UIGraphicsPushContext(context)
     defer { UIGraphicsPopContext() }
-    attributed.draw(in: rect)
+    attributed.draw(in: CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height))
   }
 
   func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {

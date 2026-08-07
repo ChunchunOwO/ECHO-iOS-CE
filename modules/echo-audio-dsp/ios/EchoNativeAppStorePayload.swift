@@ -682,23 +682,20 @@ extension EchoNativeAppStore {
     let defaultSourceUnavailable = (settings.defaultLibrarySource == "echo" && !persistent.echoConnection.enabled)
       || (settings.defaultLibrarySource == "remote" && !persistent.powerampConnection.enabled)
     let defaultLibrarySource = defaultSourceUnavailable ? "local" : settings.defaultLibrarySource
-    let desktopLyricsSection = section("desktopLyrics", localized("Desktop lyrics", "桌面歌词"), localized("A native floating lyric layer with motion and style controls.", "原生浮动歌词层，可自定义动态效果与显示样式。"), "quote.bubble.fill", [
+    let desktopLyricsSection = section("desktopLyrics", localized("Desktop lyrics", "桌面歌词"), localized("Native Picture in Picture lyrics with artwork and line transitions.", "带封面与逐句动效的原生画中画歌词。"), "quote.bubble.fill", [
       toggle("desktopLyricsEnabled", localized("Enable desktop lyrics", "启用桌面歌词"), localized("Show lyrics in a floating Picture in Picture window over other apps.", "通过悬浮的画中画窗口在其他应用上方显示歌词。"), settings.desktopLyricsEnabled),
-      toggle("desktopLyricsOnlyWhilePlaying", localized("Only while playing", "仅播放时显示"), localized("Hide the overlay when playback is paused.", "暂停播放时隐藏浮层。"), settings.desktopLyricsOnlyWhilePlaying, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsOnlyWhilePlaying", localized("Only while playing", "仅播放时显示"), localized("Hide desktop lyrics when playback is paused.", "暂停播放时隐藏桌面歌词。"), settings.desktopLyricsOnlyWhilePlaying, disabled: !settings.desktopLyricsEnabled),
       toggle("desktopLyricsShowMetadata", localized("Show track details", "显示歌曲信息"), localized("Include title and artist above the lyric.", "在歌词上方显示标题和艺术家。"), settings.desktopLyricsShowMetadata, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsBackground", localized("Background", "背景"), localized("Use the ECHO theme, the current artwork with blur, or an imported image.", "使用 ECHO 主题色、模糊歌曲封面或导入图片。"), settings.desktopLyricsBackground, [
         option("theme", localized("Theme", "主题色")), option("artwork", localized("Artwork glass", "封面玻璃")), option("custom", localized("Imported image", "导入图片")),
       ], disabled: !settings.desktopLyricsEnabled),
       action("desktopLyricsImportBackground", localized("Import background image", "导入背景图片"), localized("Choose and crop an image for the desktop lyric background.", "选择并裁剪桌面歌词背景图片。"), disabled: !settings.desktopLyricsEnabled || settings.desktopLyricsBackground != "custom"),
-      picker("desktopLyricsStyle", localized("Surface style", "表面样式"), localized("Choose the visual treatment of the floating layer.", "选择浮层的视觉样式。"), settings.desktopLyricsStyle, [
-        option("glass", localized("Glass", "玻璃")), option("solid", localized("Solid", "纯色")), option("minimal", localized("Minimal", "极简")),
-      ], disabled: !settings.desktopLyricsEnabled),
-      picker("desktopLyricsAnimation", localized("Motion", "动态效果"), localized("Choose a calm, flowing, or breathing animation.", "选择静止、流动或呼吸动画。"), settings.desktopLyricsAnimation, [
-        option("calm", localized("Calm", "静谧")), option("flow", localized("Flow", "流动")), option("pulse", localized("Pulse", "呼吸")),
+      picker("desktopLyricsAnimation", localized("Line transition", "逐句动效"), localized("Choose how the previous lyric changes into the next lyric.", "选择上一句歌词切换到下一句歌词的动效。"), settings.desktopLyricsAnimation, [
+        option("calm", localized("Fade", "淡入淡出")), option("flow", localized("Flow", "流动")), option("pulse", localized("Pulse", "呼吸")),
       ], disabled: !settings.desktopLyricsEnabled || !settings.desktopLyricsTransitionAnimation),
       toggle("desktopLyricsTransitionAnimation", localized("Lyric transition", "歌词切换动效"), localized("Animate when the active lyric changes.", "切换当前歌词时播放动效。"), settings.desktopLyricsTransitionAnimation, disabled: !settings.desktopLyricsEnabled),
-      toggle("desktopLyricsTimedReveal", localized("Timed glow", "按时间逐字发光"), localized("Reveal and glow characters across the lyric time span.", "按照歌词时间段平均逐字显示并发光。"), settings.desktopLyricsTimedReveal, disabled: !settings.desktopLyricsEnabled),
-      slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsFontSize, min: 18, max: 34, step: 1, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsTimedReveal", localized("Timed color", "按时间逐字变色"), localized("Change characters from gray to white across the lyric time span.", "按照歌词时间段将文字从灰色逐字变为白色。"), settings.desktopLyricsTimedReveal, disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the desktop lyric text size.", "调整桌面歌词的字号。"), settings.desktopLyricsFontSize, min: 18, max: 34, step: 1, disabled: !settings.desktopLyricsEnabled),
       slider("desktopLyricsWidth", localized("PiP width", "画中画宽度"), localized("Adjust the floating window width.", "调整悬浮画中画窗口的宽度。"), settings.desktopLyricsWidthScale, min: 0.2, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
       slider("desktopLyricsHeight", localized("PiP height", "画中画长度"), localized("Adjust the floating window length vertically.", "调整悬浮画中画窗口的纵向长度。"), settings.desktopLyricsHeightScale, min: 0.33, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place lyrics at the top, center, or bottom of the Picture in Picture window.", "将歌词放在画中画窗口的顶部、中央或底部。"), settings.desktopLyricsPosition, [
