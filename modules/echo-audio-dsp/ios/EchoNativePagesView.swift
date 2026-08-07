@@ -2436,7 +2436,7 @@ struct EchoNativePagesScreen: View {
   }
 
   private func sliderValueLabel(_ id: String, value: Double) -> String {
-    id == "desktopLyricsOpacity"
+    id == "desktopLyricsOpacity" || id == "desktopLyricsWidth"
       ? "\(Int((value * 100).rounded()))%"
       : "\(Int(value.rounded())) pt"
   }

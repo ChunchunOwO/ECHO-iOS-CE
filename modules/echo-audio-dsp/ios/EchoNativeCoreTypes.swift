@@ -212,7 +212,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var darkModeEnabled = false
   var desktopLyricsAnimation = "flow"
   var desktopLyricsEnabled = false
-  var desktopLyricsFontSize = 38.0
+  var desktopLyricsFontSize = 26.0
   var desktopLyricsOpacity = "medium"
   var desktopLyricsOpacityValue = 0.66
   var desktopLyricsOnlyWhilePlaying = true
@@ -220,6 +220,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var desktopLyricsShowMetadata = true
   var desktopLyricsSize = "medium"
   var desktopLyricsStyle = "glass"
+  var desktopLyricsWidthScale = 0.5
   var defaultLibrarySource = "local"
   var defaultLocalLibraryView = "songs"
   var defaultPage = "control"
@@ -276,9 +277,11 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     desktopLyricsShowMetadata = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsShowMetadata) ?? true
     desktopLyricsSize = try values.decodeIfPresent(String.self, forKey: .desktopLyricsSize) ?? "medium"
     let legacySize = desktopLyricsSize
-    desktopLyricsFontSize = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsFontSize)
-      ?? (legacySize == "small" ? 29 : legacySize == "large" ? 48 : 38)
+    let decodedFontSize = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsFontSize)
+      ?? (legacySize == "small" ? 20 : legacySize == "large" ? 32 : 26)
+    desktopLyricsFontSize = max(18, min(34, decodedFontSize))
     desktopLyricsStyle = try values.decodeIfPresent(String.self, forKey: .desktopLyricsStyle) ?? "glass"
+    desktopLyricsWidthScale = max(0.2, min(1.0, try values.decodeIfPresent(Double.self, forKey: .desktopLyricsWidthScale) ?? 0.5))
     defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "local"
     defaultLocalLibraryView = try values.decodeIfPresent(String.self, forKey: .defaultLocalLibraryView) ?? "songs"
     defaultPage = try values.decodeIfPresent(String.self, forKey: .defaultPage) ?? "control"

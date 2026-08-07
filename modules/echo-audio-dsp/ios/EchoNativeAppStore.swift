@@ -1962,7 +1962,8 @@ final class EchoNativeAppStore {
     guard let key = payload["key"] as? String, let value = number(payload["value"]) else { return }
     switch key {
     case "desktopLyricsOpacity": persistent.settings.desktopLyricsOpacityValue = max(0.2, min(0.95, value))
-    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(24, min(56, value))
+    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(18, min(34, value))
+    case "desktopLyricsWidth": persistent.settings.desktopLyricsWidthScale = max(0.2, min(1.0, value))
     default: return
     }
     configureDesktopLyrics()
@@ -2781,7 +2782,8 @@ final class EchoNativeAppStore {
       onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
       position: settings.desktopLyricsPosition,
       showMetadata: settings.desktopLyricsShowMetadata,
-      style: settings.desktopLyricsStyle
+      style: settings.desktopLyricsStyle,
+      widthScale: settings.desktopLyricsWidthScale
     ))
     updateDesktopLyrics()
   }

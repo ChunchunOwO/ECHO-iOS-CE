@@ -692,7 +692,8 @@ extension EchoNativeAppStore {
       picker("desktopLyricsAnimation", localized("Motion", "动态效果"), localized("Choose a calm, flowing, or breathing animation.", "选择静止、流动或呼吸动画。"), settings.desktopLyricsAnimation, [
         option("calm", localized("Calm", "静谧")), option("flow", localized("Flow", "流动")), option("pulse", localized("Pulse", "呼吸")),
       ], disabled: !settings.desktopLyricsEnabled),
-      slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsFontSize, min: 24, max: 56, step: 1, disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsFontSize, min: 18, max: 34, step: 1, disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsWidth", localized("PiP width", "画中画宽度"), localized("Adjust the floating window width.", "调整悬浮画中画窗口的宽度。"), settings.desktopLyricsWidthScale, min: 0.2, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place lyrics at the top, center, or bottom of the Picture in Picture window.", "将歌词放在画中画窗口的顶部、中央或底部。"), settings.desktopLyricsPosition, [
         option("top", localized("Top", "顶部")), option("center", localized("Center", "居中")), option("bottom", localized("Bottom", "底部")),
       ], disabled: !settings.desktopLyricsEnabled),
@@ -804,9 +805,12 @@ extension EchoNativeAppStore {
     step: Double,
     disabled: Bool = false
   ) -> [String: Any] {
-    let label = id == "desktopLyricsOpacity"
-      ? "\(Int((value * 100).rounded()))%"
-      : "\(Int(value.rounded())) pt"
+    let label: String
+    if id == "desktopLyricsOpacity" || id == "desktopLyricsWidth" {
+      label = "\(Int((value * 100).rounded()))%"
+    } else {
+      label = "\(Int(value.rounded())) pt"
+    }
     return row(
       id,
       title,

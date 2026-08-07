@@ -196,12 +196,15 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /isPictureInPicturePossible/u);
   assert.match(desktopLyrics, /presentationTimeStamp: CMClockGetTime/u);
   assert.match(desktopLyrics, /activateAudioSession\(\)/u);
+  assert.match(desktopLyrics, /canvasWidth\(for: configuration\.widthScale\)/u);
   assert.match(store, /attachDesktopLyrics\(to view: UIView\)/u);
   assert.match(store, /desktopLyricsController\.configure/u);
   assert.match(store, /desktopLyricsController\.update/u);
   assert.match(player, /store\.attachDesktopLyrics\(to: self\)/u);
   assert.match(player, /Toggle\(isOn: Binding\([\s\S]*desktopLyricsEnabled/u);
   assert.match(payload, /slider\("desktopLyricsSize"/u);
+  assert.match(payload, /slider\("desktopLyricsWidth"/u);
+  assert.match(payload, /desktopLyricsWidth"[\s\S]*min: 0\.2, max: 1\.0/u);
   assert.match(payload, /slider\("desktopLyricsOpacity"/u);
   assert.match(pages, /case "slider"/u);
   assert.match(store, /case "settingNumber": updateSettingNumber/u);

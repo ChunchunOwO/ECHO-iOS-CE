@@ -10,12 +10,13 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   struct Configuration: Equatable {
     var animation = "flow"
     var enabled = false
-    var fontSize = 38.0
+    var fontSize = 26.0
     var opacity = 0.66
     var onlyWhilePlaying = true
     var position = "bottom"
     var showMetadata = true
     var style = "glass"
+    var widthScale = 0.5
   }
 
   private let displayLayer = AVSampleBufferDisplayLayer()
@@ -79,12 +80,18 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   func configure(_ next: Configuration) {
     let wasEnabled = configuration.enabled
     let appearanceChanged = configuration != next
+    let canvasSizeChanged = canvasWidth(for: configuration.widthScale) != canvasWidth(for: next.widthScale)
     configuration = next
     if !next.enabled {
       stop()
       return
     }
     if !wasEnabled || appearanceChanged { userDismissed = false }
+    if canvasSizeChanged, pictureInPictureController?.isPictureInPictureActive == true {
+      programmaticStopPending = true
+      pictureInPictureController?.stopPictureInPicture()
+      return
+    }
     refreshPresentation()
   }
 
@@ -196,7 +203,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private func makeSampleBuffer() -> CMSampleBuffer? {
-    let width = 960
+    let width = canvasWidth(for: configuration.widthScale)
     let height = 540
     var pixelBuffer: CVPixelBuffer?
     let attributes: [String: Any] = [
@@ -271,6 +278,10 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     let motionScale = configuration.animation == "pulse" ? CGFloat(1 + phase * 0.012) : 1
     let panel = CGRect(x: 54, y: panelY(height: height) + motionOffset, width: CGFloat(width - 108), height: 244)
 
+    // PiP video frames are opaque; leaving the pixel buffer transparent renders as black.
+    context.setFillColor(backgroundColor.withAlphaComponent(1).cgColor)
+    context.fill(bounds)
+
     context.saveGState()
     context.translateBy(x: bounds.midX, y: panel.midY)
     context.scaleBy(x: motionScale, y: motionScale)
@@ -301,7 +312,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.saveGState()
     context.translateBy(x: 0, y: CGFloat(height))
     context.scaleBy(x: 1, y: -1)
-    let textPanel = CGRect(x: panel.minX + 32, y: CGFloat(height) - panel.maxY + 26, width: panel.width - 64, height: panel.height - 42)
+    let textPanel = CGRect(x: panel.minX + 32, y: CGFloat(height) - panel.maxY + 24, width: panel.width - 64, height: panel.height - 38)
     var textY = textPanel.minY
     if configuration.showMetadata && !currentLyric.isEmpty {
       let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  ·  ")
@@ -332,7 +343,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private var fontSize: CGFloat {
-    CGFloat(max(24, min(56, configuration.fontSize)))
+    CGFloat(max(18, min(34, configuration.fontSize)))
   }
 
   private func panelY(height: Int) -> CGFloat {
@@ -343,10 +354,17 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     }
   }
 
+  private func canvasWidth(for scale: Double) -> Int {
+    let clamped = max(0.2, min(1.0, scale))
+    return max(192, min(960, Int((960 * clamped).rounded()) / 2 * 2))
+  }
+
   private func drawText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor, context: CGContext) {
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = .center
     paragraph.lineBreakMode = .byTruncatingTail
+    UIGraphicsPushContext(context)
+    defer { UIGraphicsPopContext() }
     (text as NSString).draw(in: rect, withAttributes: [
       .font: font,
       .foregroundColor: color,
@@ -362,12 +380,16 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+    let shouldRestart = programmaticStopPending && shouldPresent
     startRequested = false
     userDismissed = !programmaticStopPending
     programmaticStopPending = false
     renderTimer?.invalidate()
     renderTimer = nil
     displayLayer.flushAndRemoveImage()
+    if shouldRestart {
+      refreshPresentation()
+    }
   }
 
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
