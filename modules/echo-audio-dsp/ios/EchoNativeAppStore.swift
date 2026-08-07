@@ -1901,6 +1901,8 @@ final class EchoNativeAppStore {
     case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled; playerModel.desktopLyricsEnabled = enabled
     case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = enabled
     case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = enabled
+    case "desktopLyricsTransitionAnimation": persistent.settings.desktopLyricsTransitionAnimation = enabled
+    case "desktopLyricsTimedReveal": persistent.settings.desktopLyricsTimedReveal = enabled
     case "autoQueueImports": persistent.settings.autoQueueImportedLocalTracks = enabled
     case "confirmDelete": persistent.settings.confirmBeforeDeletingLocalTracks = enabled
     case "artworkGlow": persistent.settings.showArtworkGlow = enabled; playerModel.showArtworkGlow = enabled
@@ -2783,6 +2785,8 @@ final class EchoNativeAppStore {
       position: settings.desktopLyricsPosition,
       showMetadata: settings.desktopLyricsShowMetadata,
       style: settings.desktopLyricsStyle,
+      timedReveal: settings.desktopLyricsTimedReveal,
+      transitionAnimation: settings.desktopLyricsTransitionAnimation,
       widthScale: settings.desktopLyricsWidthScale
     ))
     updateDesktopLyrics()
@@ -2795,7 +2799,8 @@ final class EchoNativeAppStore {
       lines: playerModel.lyricLines,
       activeIndex: playerModel.activeLyricIndex,
       isPlaying: playerModel.isPlaying,
-      durationMs: playerModel.durationMs
+      durationMs: playerModel.durationMs,
+      positionMs: playerModel.positionMs
     )
   }
 

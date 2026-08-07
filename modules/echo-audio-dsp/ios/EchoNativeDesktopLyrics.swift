@@ -3,6 +3,7 @@ import AVKit
 import CoreMedia
 import CoreVideo
 import Foundation
+import QuartzCore
 import UIKit
 
 @MainActor
@@ -16,6 +17,8 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     var position = "bottom"
     var showMetadata = true
     var style = "glass"
+    var timedReveal = false
+    var transitionAnimation = false
     var widthScale = 0.5
   }
 
@@ -30,12 +33,17 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private var previousLyric = ""
   private var currentLyric = ""
   private var nextLyric = ""
+  private var activeLyricIndex = 0
+  private var currentLineStartMs = -1.0
+  private var nextLineStartMs = -1.0
+  private var positionMs = 0.0
   private var isPlaying = false
   private var durationMs = 0.0
   private var frameIndex: Int64 = 0
   private var userDismissed = false
   private var programmaticStopPending = false
   private var startRequested = false
+  private var lyricTransitionStartedAt = CACurrentMediaTime()
 
   override init() {
     super.init()
@@ -101,15 +109,23 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     lines: [EchoNativeMetadataService.LyricLine],
     activeIndex: Int,
     isPlaying: Bool,
-    durationMs: Double
+    durationMs: Double,
+    positionMs: Double
   ) {
     self.title = title
     self.artist = artist
     self.isPlaying = isPlaying
     self.durationMs = durationMs
+    self.positionMs = positionMs
+    if activeLyricIndex != activeIndex {
+      activeLyricIndex = activeIndex
+      lyricTransitionStartedAt = CACurrentMediaTime()
+    }
     previousLyric = activeIndex > 0 && lines.indices.contains(activeIndex - 1) ? lines[activeIndex - 1].text : ""
     currentLyric = lines.indices.contains(activeIndex) ? lines[activeIndex].text : ""
     nextLyric = lines.indices.contains(activeIndex + 1) ? lines[activeIndex + 1].text : ""
+    currentLineStartMs = lines.indices.contains(activeIndex) ? lines[activeIndex].milliseconds : -1
+    nextLineStartMs = lines.dropFirst(max(0, activeIndex + 1)).first(where: { $0.milliseconds >= 0 })?.milliseconds ?? -1
 
     refreshPresentation()
   }
@@ -274,8 +290,12 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private func drawFrame(in context: CGContext, width: Int, height: Int) {
     let bounds = CGRect(x: 0, y: 0, width: width, height: height)
     let phase = sin(Double(frameIndex) * 0.12)
-    let motionOffset = configuration.animation == "flow" ? CGFloat(phase * 4) : 0
-    let motionScale = configuration.animation == "pulse" ? CGFloat(1 + phase * 0.012) : 1
+    let transitionProgress = min(1, max(0, (CACurrentMediaTime() - lyricTransitionStartedAt) / 0.28))
+    let animated = configuration.transitionAnimation
+    let motionOffset = animated
+      ? (configuration.animation == "flow" ? CGFloat(phase * 4) : CGFloat((1 - transitionProgress) * 12))
+      : 0
+    let motionScale = animated && configuration.animation == "pulse" ? CGFloat(1 + phase * 0.012) : 1
     let panel = CGRect(x: 54, y: panelY(height: height) + motionOffset, width: CGFloat(width - 108), height: 244)
 
     // PiP video frames are opaque; leaving the pixel buffer transparent renders as black.
@@ -325,7 +345,12 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       drawText(previousLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
       textY += 34
     }
-    drawText(currentLyric.isEmpty ? title : currentLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 86), font: .systemFont(ofSize: fontSize, weight: .bold), color: .white, context: context)
+    let currentText = currentLyric.isEmpty ? title : currentLyric
+    if configuration.timedReveal, !currentLyric.isEmpty {
+      drawTimedText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 86), progress: lyricProgress, alpha: animated ? transitionProgress : 1, font: .systemFont(ofSize: fontSize, weight: .bold), context: context)
+    } else {
+      drawText(currentText, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 86), font: .systemFont(ofSize: fontSize, weight: .bold), color: .white.withAlphaComponent(animated ? transitionProgress : 1), context: context)
+    }
     textY += 92
     if !nextLyric.isEmpty {
       drawText(nextLyric, in: CGRect(x: textPanel.minX, y: textY, width: textPanel.width, height: 30), font: .systemFont(ofSize: fontSize * 0.62, weight: .medium), color: .white.withAlphaComponent(0.36), context: context)
@@ -344,6 +369,13 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private var fontSize: CGFloat {
     CGFloat(max(18, min(34, configuration.fontSize)))
+  }
+
+  private var lyricProgress: Double {
+    guard currentLineStartMs >= 0 else { return 1 }
+    let end = nextLineStartMs > currentLineStartMs ? nextLineStartMs : durationMs
+    guard end > currentLineStartMs else { return 1 }
+    return max(0, min(1, (positionMs - currentLineStartMs) / (end - currentLineStartMs)))
   }
 
   private func panelY(height: Int) -> CGFloat {
@@ -370,6 +402,32 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       .foregroundColor: color,
       .paragraphStyle: paragraph,
     ])
+  }
+
+  private func drawTimedText(_ text: String, in rect: CGRect, progress: Double, alpha: Double, font: UIFont, context: CGContext) {
+    let characters = Array(text)
+    let prefixCount = Int((Double(characters.count) * progress).rounded(.down))
+    let prefixLength = String(characters.prefix(prefixCount)).utf16.count
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.alignment = .center
+    paragraph.lineBreakMode = .byTruncatingTail
+    let attributed = NSMutableAttributedString(string: text, attributes: [
+      .font: font,
+      .foregroundColor: UIColor.white.withAlphaComponent(0.24 * alpha),
+      .paragraphStyle: paragraph,
+    ])
+    if prefixLength > 0 {
+      let shadow = NSShadow()
+      shadow.shadowColor = UIColor.systemPink.withAlphaComponent(0.9 * alpha)
+      shadow.shadowBlurRadius = 10
+      attributed.addAttributes([
+        .foregroundColor: UIColor.white.withAlphaComponent(alpha),
+        .shadow: shadow,
+      ], range: NSRange(location: 0, length: prefixLength))
+    }
+    UIGraphicsPushContext(context)
+    defer { UIGraphicsPopContext() }
+    attributed.draw(in: rect)
   }
 
   func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {

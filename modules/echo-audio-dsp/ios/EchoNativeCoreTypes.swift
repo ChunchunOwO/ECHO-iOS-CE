@@ -220,6 +220,8 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var desktopLyricsShowMetadata = true
   var desktopLyricsSize = "medium"
   var desktopLyricsStyle = "glass"
+  var desktopLyricsTimedReveal = false
+  var desktopLyricsTransitionAnimation = false
   var desktopLyricsWidthScale = 0.5
   var defaultLibrarySource = "local"
   var defaultLocalLibraryView = "songs"
@@ -281,6 +283,8 @@ struct EchoNativeCoreSettings: Codable, Sendable {
       ?? (legacySize == "small" ? 20 : legacySize == "large" ? 32 : 26)
     desktopLyricsFontSize = max(18, min(34, decodedFontSize))
     desktopLyricsStyle = try values.decodeIfPresent(String.self, forKey: .desktopLyricsStyle) ?? "glass"
+    desktopLyricsTimedReveal = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTimedReveal) ?? false
+    desktopLyricsTransitionAnimation = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTransitionAnimation) ?? false
     desktopLyricsWidthScale = max(0.2, min(1.0, try values.decodeIfPresent(Double.self, forKey: .desktopLyricsWidthScale) ?? 0.5))
     defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "local"
     defaultLocalLibraryView = try values.decodeIfPresent(String.self, forKey: .defaultLocalLibraryView) ?? "songs"

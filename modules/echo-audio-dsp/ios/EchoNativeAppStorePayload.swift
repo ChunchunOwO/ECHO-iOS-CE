@@ -691,7 +691,9 @@ extension EchoNativeAppStore {
       ], disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsAnimation", localized("Motion", "动态效果"), localized("Choose a calm, flowing, or breathing animation.", "选择静止、流动或呼吸动画。"), settings.desktopLyricsAnimation, [
         option("calm", localized("Calm", "静谧")), option("flow", localized("Flow", "流动")), option("pulse", localized("Pulse", "呼吸")),
-      ], disabled: !settings.desktopLyricsEnabled),
+      ], disabled: !settings.desktopLyricsEnabled || !settings.desktopLyricsTransitionAnimation),
+      toggle("desktopLyricsTransitionAnimation", localized("Lyric transition", "歌词切换动效"), localized("Animate when the active lyric changes.", "切换当前歌词时播放动效。"), settings.desktopLyricsTransitionAnimation, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsTimedReveal", localized("Timed glow", "按时间逐字发光"), localized("Reveal and glow characters across the lyric time span.", "按照歌词时间段平均逐字显示并发光。"), settings.desktopLyricsTimedReveal, disabled: !settings.desktopLyricsEnabled),
       slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the lyric scale for a glanceable overlay.", "调整浮层歌词的字号。"), settings.desktopLyricsFontSize, min: 18, max: 34, step: 1, disabled: !settings.desktopLyricsEnabled),
       slider("desktopLyricsWidth", localized("PiP width", "画中画宽度"), localized("Adjust the floating window width.", "调整悬浮画中画窗口的宽度。"), settings.desktopLyricsWidthScale, min: 0.2, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place lyrics at the top, center, or bottom of the Picture in Picture window.", "将歌词放在画中画窗口的顶部、中央或底部。"), settings.desktopLyricsPosition, [
