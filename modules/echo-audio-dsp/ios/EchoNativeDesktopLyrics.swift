@@ -13,10 +13,11 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     var animation = "flow"
     var background = "theme"
     var enabled = false
-    var fontSize = 26.0
+    var fontSize = 32.0
     var heightScale = 0.36
     var onlyWhilePlaying = true
     var position = "bottom"
+    var rainbowGradient = false
     var showMetadata = true
     var timedReveal = false
     var transitionAnimation = false
@@ -25,6 +26,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private let displayLayer = AVSampleBufferDisplayLayer()
   private let hostView = UIView(frame: CGRect(x: 0, y: 0, width: 108, height: 32))
+  private let renderScale = 2
   private var pictureInPictureController: AVPictureInPictureController?
   private var pictureInPicturePossibleObservation: NSKeyValueObservation?
   private var renderTimer: Timer?
@@ -139,12 +141,13 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     self.durationMs = durationMs
     self.positionMs = positionMs
     positionUpdatedAt = CACurrentMediaTime()
-    if activeLyricIndex != activeIndex {
+    let nextLyric = lines.indices.contains(activeIndex) ? lines[activeIndex].text : ""
+    if activeLyricIndex != activeIndex || currentLyric != nextLyric {
       previousLyric = currentLyric
       activeLyricIndex = activeIndex
       lyricTransitionStartedAt = CACurrentMediaTime()
     }
-    currentLyric = lines.indices.contains(activeIndex) ? lines[activeIndex].text : ""
+    currentLyric = nextLyric
     currentLineStartMs = lines.indices.contains(activeIndex) ? lines[activeIndex].milliseconds : -1
     nextLineStartMs = lines.dropFirst(max(0, activeIndex + 1)).first(where: { $0.milliseconds >= 0 })?.milliseconds ?? -1
 
@@ -241,6 +244,8 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private func makeSampleBuffer() -> CMSampleBuffer? {
     let width = canvasWidth(for: configuration.widthScale)
     let height = canvasHeight(for: configuration.heightScale)
+    let pixelWidth = width * renderScale
+    let pixelHeight = height * renderScale
     var pixelBuffer: CVPixelBuffer?
     let attributes: [String: Any] = [
       kCVPixelBufferCGImageCompatibilityKey as String: true,
@@ -249,16 +254,17 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     ]
     guard CVPixelBufferCreate(
       kCFAllocatorDefault,
-      width,
-      height,
+      pixelWidth,
+      pixelHeight,
       kCVPixelFormatType_32BGRA,
       attributes as CFDictionary,
       &pixelBuffer
     ) == kCVReturnSuccess,
       let pixelBuffer,
-      let context = makeContext(for: pixelBuffer, width: width, height: height)
+      let context = makeContext(for: pixelBuffer, width: pixelWidth, height: pixelHeight)
     else { return nil }
 
+    context.scaleBy(x: CGFloat(renderScale), y: CGFloat(renderScale))
     drawFrame(in: context, width: width, height: height)
     CVPixelBufferUnlockBaseAddress(pixelBuffer, .init(rawValue: 0))
 
@@ -315,6 +321,11 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       CVPixelBufferUnlockBaseAddress(pixelBuffer, .init(rawValue: 0))
       return nil
     }
+    context.interpolationQuality = .high
+    context.setAllowsAntialiasing(true)
+    context.setShouldAntialias(true)
+    context.setAllowsFontSmoothing(true)
+    context.setShouldSmoothFonts(true)
     return context
   }
 
@@ -323,8 +334,8 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     let transitionProgress = min(1, max(0, (CACurrentMediaTime() - lyricTransitionStartedAt) / 0.28))
     drawBackground(in: context, bounds: bounds)
     let inset = max(18, min(52, CGFloat(width) * 0.055))
-    let coverSize = max(64, min(CGFloat(height) - inset * 2, CGFloat(width) * 0.38))
-    let gap = max(18, min(36, CGFloat(width) * 0.035))
+    let coverSize = max(72, min(CGFloat(height) * 0.74, CGFloat(width) * 0.42))
+    let gap = max(12, min(22, CGFloat(width) * 0.022))
     let contentY = contentY(height: height, contentHeight: coverSize)
     let cover = CGRect(x: inset, y: contentY, width: coverSize, height: coverSize)
     let text = CGRect(
@@ -341,7 +352,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     let textPanel = CGRect(x: text.minX, y: CGFloat(height) - text.maxY, width: text.width, height: text.height)
     let currentText = currentLyric.isEmpty ? title : currentLyric
     let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  /  ")
-    let metadataFont = UIFont.systemFont(ofSize: min(18, max(11, coverSize * 0.09)), weight: .semibold)
+    let metadataFont = UIFont.systemFont(ofSize: min(24, max(14, coverSize * 0.11)), weight: .semibold)
     let metadataHeight: CGFloat = configuration.showMetadata && !metadata.isEmpty ? metadataFont.lineHeight + 4 : 0
     let metadataGap: CGFloat = metadataHeight > 0 ? min(8, coverSize * 0.04) : 0
     let availableLyricHeight = max(24, textPanel.height - metadataHeight - metadataGap)
@@ -397,16 +408,22 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
         currentText,
         in: lyricRect.offsetBy(dx: 0, dy: incomingOffset),
         progress: lyricProgress,
+        scrollProgress: lyricScrollProgress,
+        rainbow: configuration.rainbowGradient,
+        rainbowPhase: rainbowPhase,
         alpha: lyricAlpha,
         font: lyricFont,
         context: context
       )
     } else {
-      drawCenteredText(
+      drawScrollingText(
         currentText,
         in: lyricRect.offsetBy(dx: 0, dy: incomingOffset),
+        progress: lyricScrollProgress,
         font: lyricFont,
         color: .white.withAlphaComponent(lyricAlpha),
+        rainbow: configuration.rainbowGradient,
+        rainbowPhase: rainbowPhase,
         context: context
       )
     }
@@ -498,7 +515,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private var fontSize: CGFloat {
-    CGFloat(max(18, min(34, configuration.fontSize)))
+    CGFloat(max(18, min(48, configuration.fontSize)))
   }
 
   private var lyricProgress: Double {
@@ -507,6 +524,15 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     guard end > currentLineStartMs else { return 1 }
     let interpolatedPosition = min(durationMs, positionMs + (isPlaying ? (CACurrentMediaTime() - positionUpdatedAt) * 1000 : 0))
     return max(0, min(1, (interpolatedPosition - currentLineStartMs) / (end - currentLineStartMs)))
+  }
+
+  private var lyricScrollProgress: Double {
+    guard currentLineStartMs < 0 else { return lyricProgress }
+    return min(1, max(0, (CACurrentMediaTime() - lyricTransitionStartedAt) / 8))
+  }
+
+  private var rainbowPhase: CGFloat {
+    CGFloat((CACurrentMediaTime() * 0.12).truncatingRemainder(dividingBy: 1))
   }
 
   private func drawCenteredText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor, context: CGContext) {
@@ -549,7 +575,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private func drawText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor, context: CGContext) {
     let paragraph = NSMutableParagraphStyle()
-    paragraph.alignment = .center
+    paragraph.alignment = .left
     paragraph.lineBreakMode = .byTruncatingTail
     UIGraphicsPushContext(context)
     defer { UIGraphicsPopContext() }
@@ -560,32 +586,98 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     ])
   }
 
-  private func drawTimedText(_ text: String, in rect: CGRect, progress: Double, alpha: Double, font: UIFont, context: CGContext) {
-    let characters = Array(text)
-    let prefixCount = Int((Double(characters.count) * progress).rounded(.down))
-    let prefixLength = String(characters.prefix(prefixCount)).utf16.count
-    let paragraph = NSMutableParagraphStyle()
-    paragraph.alignment = .center
-    paragraph.lineBreakMode = .byTruncatingTail
-    let attributed = NSMutableAttributedString(string: text, attributes: [
-      .font: font,
-      .foregroundColor: UIColor(white: 0.52, alpha: alpha),
-      .paragraphStyle: paragraph,
-    ])
-    if prefixLength > 0 {
-      attributed.addAttributes([
-        .foregroundColor: UIColor.white.withAlphaComponent(alpha),
-      ], range: NSRange(location: 0, length: prefixLength))
+  private func drawScrollingText(
+    _ text: String,
+    in rect: CGRect,
+    progress: Double,
+    font: UIFont,
+    color: UIColor,
+    rainbow: Bool,
+    rainbowPhase: CGFloat,
+    context: CGContext
+  ) {
+    let lines = text.components(separatedBy: .newlines)
+    let height = min(rect.height, font.lineHeight * CGFloat(max(1, lines.count)))
+    let originY = rect.midY - height / 2
+    for (index, line) in lines.enumerated() {
+      let lineRect = CGRect(
+        x: rect.minX,
+        y: originY + CGFloat(index) * font.lineHeight,
+        width: rect.width,
+        height: font.lineHeight
+      )
+      let measuredWidth = ceil((line as NSString).size(withAttributes: [.font: font]).width) + 2
+      let offset = lyricScrollOffset(lineWidth: measuredWidth, viewportWidth: lineRect.width, progress: progress)
+      context.saveGState()
+      context.clip(to: lineRect)
+      context.translateBy(x: -offset, y: 0)
+      let contentRect = CGRect(x: lineRect.minX, y: lineRect.minY, width: max(lineRect.width, measuredWidth), height: lineRect.height)
+      if rainbow {
+        drawRainbowText(line, in: contentRect, lineWidth: measuredWidth, phase: rainbowPhase, alpha: color.cgColor.alpha, font: font, context: context)
+      } else {
+        drawText(line, in: contentRect, font: font, color: color, context: context)
+      }
+      context.restoreGState()
     }
-    let measured = attributed.boundingRect(
-      with: CGSize(width: rect.width, height: CGFloat.greatestFiniteMagnitude),
-      options: [.usesLineFragmentOrigin, .usesFontLeading],
-      context: nil
-    )
-    let height = min(rect.height, max(font.lineHeight, measured.height))
-    UIGraphicsPushContext(context)
-    defer { UIGraphicsPopContext() }
-    attributed.draw(in: CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height))
+  }
+
+  private func drawTimedText(
+    _ text: String,
+    in rect: CGRect,
+    progress: Double,
+    scrollProgress: Double,
+    rainbow: Bool,
+    rainbowPhase: CGFloat,
+    alpha: Double,
+    font: UIFont,
+    context: CGContext
+  ) {
+    let lines = text.components(separatedBy: .newlines)
+    let height = min(rect.height, font.lineHeight * CGFloat(max(1, lines.count)))
+    let originY = rect.midY - height / 2
+    for (index, line) in lines.enumerated() {
+      let lineRect = CGRect(
+        x: rect.minX,
+        y: originY + CGFloat(index) * font.lineHeight,
+        width: rect.width,
+        height: font.lineHeight
+      )
+      let lineWidth = ceil((line as NSString).size(withAttributes: [.font: font]).width) + 2
+      let contentRect = CGRect(x: lineRect.minX, y: lineRect.minY, width: max(lineRect.width, lineWidth), height: lineRect.height)
+      let offset = lyricScrollOffset(lineWidth: lineWidth, viewportWidth: lineRect.width, progress: scrollProgress)
+      context.saveGState()
+      context.clip(to: lineRect)
+      context.translateBy(x: -offset, y: 0)
+      drawText(line, in: contentRect, font: font, color: UIColor(white: 0.52, alpha: alpha), context: context)
+      context.clip(to: CGRect(x: contentRect.minX, y: contentRect.minY, width: lineWidth * CGFloat(progress), height: contentRect.height))
+      if rainbow {
+        drawRainbowText(line, in: contentRect, lineWidth: lineWidth, phase: rainbowPhase, alpha: alpha, font: font, context: context)
+      } else {
+        drawText(line, in: contentRect, font: font, color: .white.withAlphaComponent(alpha), context: context)
+      }
+      context.restoreGState()
+    }
+  }
+
+  private func drawRainbowText(_ text: String, in rect: CGRect, lineWidth: CGFloat, phase: CGFloat, alpha: CGFloat, font: UIFont, context: CGContext) {
+    var x = rect.minX
+    for character in text {
+      let value = String(character)
+      let width = max(1, ceil((value as NSString).size(withAttributes: [.font: font]).width))
+      let position = max(0, min(1, (x - rect.minX) / max(1, lineWidth)))
+      drawText(value, in: CGRect(x: x, y: rect.minY, width: width + 1, height: rect.height), font: font, color: rainbowColor(position: position, phase: phase, alpha: alpha), context: context)
+      x += width
+    }
+  }
+
+  private func rainbowColor(position: CGFloat, phase: CGFloat, alpha: CGFloat) -> UIColor {
+    let hue = (position + phase).truncatingRemainder(dividingBy: 1)
+    return UIColor(hue: hue < 0 ? hue + 1 : hue, saturation: 0.88, brightness: 1, alpha: alpha)
+  }
+
+  private func lyricScrollOffset(lineWidth: CGFloat, viewportWidth: CGFloat, progress: Double) -> CGFloat {
+    let maximum = max(0, lineWidth - viewportWidth)
+    return min(maximum, max(0, lineWidth * CGFloat(progress) - viewportWidth * 0.78))
   }
 
   func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {

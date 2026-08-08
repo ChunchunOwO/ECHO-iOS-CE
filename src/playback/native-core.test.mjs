@@ -207,6 +207,18 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /drawCover\(in: cover/u);
   assert.match(desktopLyrics, /artworkBackgroundImage/u);
   assert.match(desktopLyrics, /positionUpdatedAt/u);
+  assert.match(desktopLyrics, /private let renderScale = 2/u);
+  assert.match(desktopLyrics, /paragraph\.alignment = \.left/u);
+  assert.match(desktopLyrics, /let lines = text\.components\(separatedBy: \.newlines\)/u);
+  assert.match(desktopLyrics, /lineWidth \* CGFloat\(progress\)/u);
+  assert.match(desktopLyrics, /private func lyricScrollOffset/u);
+  assert.match(desktopLyrics, /lineWidth \* CGFloat\(progress\) - viewportWidth \* 0\.78/u);
+  assert.match(desktopLyrics, /private func drawRainbowText/u);
+  assert.match(desktopLyrics, /rainbowColor\(position: position, phase: phase/u);
+  assert.match(coreTypes, /var desktopLyricsFontSize = 32\.0/u);
+  assert.match(coreTypes, /var desktopLyricsRainbowGradient = false/u);
+  assert.match(payload, /desktopLyricsSize"[\s\S]*min: 18, max: 48/u);
+  assert.match(payload, /toggle\("desktopLyricsRainbowGradient"/u);
   assert.doesNotMatch(desktopLyrics, /NSShadow|panelColor|motionOffset/u);
   assert.match(metadata, /\.joined\(separator: "\\n"\)/u);
   assert.match(store, /attachDesktopLyrics\(to view: UIView\)/u);
@@ -223,7 +235,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(payload, /toggle\("desktopLyricsTransitionAnimation"/u);
   assert.match(payload, /toggle\("desktopLyricsTimedReveal"/u);
   assert.doesNotMatch(payload, /desktopLyricsStyle/u);
-  assert.match(payload, /Change characters from gray to white/u);
+  assert.match(payload, /Fill every lyric line smoothly from left to right in white/u);
   assert.doesNotMatch(payload, /slider\("desktopLyricsOpacity"/u);
   assert.match(pages, /photosPicker\(/u);
   assert.match(store, /case "desktopLyricsBackgroundImage"/u);
@@ -252,6 +264,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(payload, /let desktopLyricsSection = section\("desktopLyrics"/u);
   assert.match(payload, /picker\("desktopLyricsAnimation"/u);
   assert.match(store, /case "desktopLyricsEnabled"/u);
+  assert.match(store, /case "desktopLyricsRainbowGradient"/u);
   assert.ok(pages.includes('Text("DISC \\(discNo)")'));
   assert.match(pages, /"action": "playlistPlay"/u);
   assert.match(pages, /"action": "streamingPlaylistOpen", "id": playlist\.id, "play": true/u);

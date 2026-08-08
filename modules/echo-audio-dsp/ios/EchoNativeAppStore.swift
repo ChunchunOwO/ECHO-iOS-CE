@@ -1904,6 +1904,7 @@ final class EchoNativeAppStore {
     case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled; playerModel.desktopLyricsEnabled = enabled
     case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = enabled
     case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = enabled
+    case "desktopLyricsRainbowGradient": persistent.settings.desktopLyricsRainbowGradient = enabled
     case "desktopLyricsTransitionAnimation": persistent.settings.desktopLyricsTransitionAnimation = enabled
     case "desktopLyricsTimedReveal": persistent.settings.desktopLyricsTimedReveal = enabled
     case "autoQueueImports": persistent.settings.autoQueueImportedLocalTracks = enabled
@@ -1965,7 +1966,7 @@ final class EchoNativeAppStore {
   private func updateSettingNumber(_ payload: [String: Any]) {
     guard let key = payload["key"] as? String, let value = number(payload["value"]) else { return }
     switch key {
-    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(18, min(34, value))
+    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(18, min(48, value))
     case "desktopLyricsWidth": persistent.settings.desktopLyricsWidthScale = max(0.2, min(1.0, value))
     case "desktopLyricsHeight": persistent.settings.desktopLyricsHeightScale = max(0.33, min(1.0, value))
     default: return
@@ -2786,6 +2787,7 @@ final class EchoNativeAppStore {
       heightScale: settings.desktopLyricsHeightScale,
       onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
       position: settings.desktopLyricsPosition,
+      rainbowGradient: settings.desktopLyricsRainbowGradient,
       showMetadata: settings.desktopLyricsShowMetadata,
       timedReveal: settings.desktopLyricsTimedReveal,
       transitionAnimation: settings.desktopLyricsTransitionAnimation,
