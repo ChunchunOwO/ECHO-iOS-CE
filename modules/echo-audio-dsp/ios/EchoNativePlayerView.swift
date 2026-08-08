@@ -275,6 +275,7 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var connectionOnline = false
   @Published var controlsEnabled = false
   @Published var darkModeEnabled = false
+  @Published var desktopLyricsEnabled = false
   @Published var durationMs = 0.0
   @Published var eqEnabled = false
   @Published var externalSourcePicker: EchoNativeExternalSourcePickerPayload?
@@ -395,7 +396,10 @@ public final class EchoNativeAppView: ExpoView {
 
   public override func didMoveToWindow() {
     super.didMoveToWindow()
-    if window != nil { store.start() }
+    if window != nil {
+      store.attachDesktopLyrics(to: self)
+      store.start()
+    }
     if window != nil, hostingController.view.superview == nil, let parent = findHostingViewController() {
       store.presenter = parent
       parent.addChild(hostingController)
@@ -1073,8 +1077,21 @@ struct EchoNativePlayerScreen: View {
       }
       .disabled(model.metadataLoading)
 
+      Divider()
+      Toggle(isOn: Binding(
+        get: { model.desktopLyricsEnabled },
+        set: { enabled in
+          onAction(["action": "settingToggle", "key": "desktopLyricsEnabled", "enabled": enabled])
+        }
+      )) {
+        Label(
+          model.language == "en" ? "Desktop lyrics" : "桌面歌词",
+          systemImage: model.desktopLyricsEnabled ? "captions.bubble.fill" : "captions.bubble"
+        )
+      }
+      .tint(echoAccent)
+
       if model.showPlayerOutputInMenu {
-        Divider()
         Picker(selection: Binding(
           get: { outputSource },
           set: { onAction(["action": "outputSource", "mode": $0]) }

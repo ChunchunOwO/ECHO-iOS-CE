@@ -7,6 +7,7 @@ extension EchoNativeAppStore {
     playerModel.connectionOnline = connectionStatus.online
     playerModel.artworkBackgroundEnabled = persistent.settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = persistent.settings.darkModeEnabled
+    playerModel.desktopLyricsEnabled = persistent.settings.desktopLyricsEnabled
     playerModel.followSystemAppearance = persistent.settings.followSystemAppearance
     playerModel.language = persistent.settings.language
     playerModel.playbackMode = persistent.settings.playbackMode
@@ -681,6 +682,27 @@ extension EchoNativeAppStore {
     let defaultSourceUnavailable = (settings.defaultLibrarySource == "echo" && !persistent.echoConnection.enabled)
       || (settings.defaultLibrarySource == "remote" && !persistent.powerampConnection.enabled)
     let defaultLibrarySource = defaultSourceUnavailable ? "local" : settings.defaultLibrarySource
+    let desktopLyricsSection = section("desktopLyrics", localized("Desktop lyrics", "桌面歌词"), localized("Native Picture in Picture lyrics with artwork and line transitions.", "带封面与逐句动效的原生画中画歌词。"), "quote.bubble.fill", [
+      toggle("desktopLyricsEnabled", localized("Enable desktop lyrics", "启用桌面歌词"), localized("Show lyrics in a floating Picture in Picture window over other apps.", "通过悬浮的画中画窗口在其他应用上方显示歌词。"), settings.desktopLyricsEnabled),
+      toggle("desktopLyricsOnlyWhilePlaying", localized("Only while playing", "仅播放时显示"), localized("Hide desktop lyrics when playback is paused.", "暂停播放时隐藏桌面歌词。"), settings.desktopLyricsOnlyWhilePlaying, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsShowMetadata", localized("Show track details", "显示歌曲信息"), localized("Include title and artist above the lyric.", "在歌词上方显示标题和艺术家。"), settings.desktopLyricsShowMetadata, disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsBackground", localized("Background", "背景"), localized("Use the ECHO theme, the current artwork with blur, or an imported image.", "使用 ECHO 主题色、模糊歌曲封面或导入图片。"), settings.desktopLyricsBackground, [
+        option("theme", localized("Theme", "主题色")), option("artwork", localized("Artwork glass", "封面玻璃")), option("custom", localized("Imported image", "导入图片")),
+      ], disabled: !settings.desktopLyricsEnabled),
+      action("desktopLyricsImportBackground", localized("Import background image", "导入背景图片"), localized("Choose and crop an image for the desktop lyric background.", "选择并裁剪桌面歌词背景图片。"), disabled: !settings.desktopLyricsEnabled || settings.desktopLyricsBackground != "custom"),
+      picker("desktopLyricsAnimation", localized("Line transition", "逐句动效"), localized("Choose how the previous lyric changes into the next lyric.", "选择上一句歌词切换到下一句歌词的动效。"), settings.desktopLyricsAnimation, [
+        option("calm", localized("Fade", "淡入淡出")), option("flow", localized("Flow", "流动")), option("pulse", localized("Pulse", "呼吸")),
+      ], disabled: !settings.desktopLyricsEnabled || !settings.desktopLyricsTransitionAnimation),
+      toggle("desktopLyricsTransitionAnimation", localized("Lyric transition", "歌词切换动效"), localized("Animate when the active lyric changes.", "切换当前歌词时播放动效。"), settings.desktopLyricsTransitionAnimation, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsTimedReveal", localized("Timed fill", "逐字填充动效"), localized("Fill every lyric line smoothly from left to right in white.", "每行歌词同时从左向右平滑填充为白色。"), settings.desktopLyricsTimedReveal, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsRainbowGradient", localized("Rainbow gradient", "彩虹渐变歌词"), localized("Animate lyric colors across the spectrum; timed fill colors only the highlighted text.", "让歌词颜色沿彩虹动态变化；开启逐字填充时仅高亮部分着色。"), settings.desktopLyricsRainbowGradient, disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsSize", localized("Text size", "文字大小"), localized("Tune the desktop lyric text size.", "调整桌面歌词的字号。"), settings.desktopLyricsFontSize, min: 18, max: 48, step: 1, disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsWidth", localized("PiP width", "画中画宽度"), localized("Adjust the floating window width.", "调整悬浮画中画窗口的宽度。"), settings.desktopLyricsWidthScale, min: 0.2, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
+      slider("desktopLyricsHeight", localized("PiP height", "画中画长度"), localized("Adjust the floating window length vertically.", "调整悬浮画中画窗口的纵向长度。"), settings.desktopLyricsHeightScale, min: 0.33, max: 1.0, step: 0.01, disabled: !settings.desktopLyricsEnabled),
+      picker("desktopLyricsPosition", localized("Position", "显示位置"), localized("Place lyrics at the top, center, or bottom of the Picture in Picture window.", "将歌词放在画中画窗口的顶部、中央或底部。"), settings.desktopLyricsPosition, [
+        option("top", localized("Top", "顶部")), option("center", localized("Center", "居中")), option("bottom", localized("Bottom", "底部")),
+      ], disabled: !settings.desktopLyricsEnabled),
+    ])
     let sections: [[String: Any]] = [
       section("interface", localized("Interface", "界面"), localized("Language and appearance", "语言与外观"), "paintbrush", [
         picker("language", localized("Language", "语言"), localized("Changes the entire app language.", "更改整个应用的显示语言。"), settings.language, [option("zh", "中文"), option("en", "English")]),
@@ -692,6 +714,7 @@ extension EchoNativeAppStore {
         toggle("followSystemAppearance", localized("Follow system appearance", "跟随系统外观"), localized("Use the iOS light or dark appearance automatically.", "自动使用 iOS 的浅色或深色外观。"), settings.followSystemAppearance),
         picker("manualAppearance", localized("Manual appearance", "手动外观"), localized("Used when following the system is off.", "关闭跟随系统后使用。"), settings.darkModeEnabled ? "dark" : "light", [option("light", localized("Light", "浅色")), option("dark", localized("Dark", "深色"))], disabled: settings.followSystemAppearance),
       ]),
+      desktopLyricsSection,
       section("playback", localized("Playback", "播放"), localized("DSP and playback behavior", "DSP 与播放行为"), "waveform", [
         row("eq", localized("Equalizer", "均衡器"), localized("Ten-band native DSP equalizer.", "十段原生 DSP 均衡器。"), kind: "eq", value: settings.eqPreset),
         toggle("loudness", localized("Loudness normalization", "响度归一化"), localized("Reduces large volume differences between tracks.", "减小歌曲之间过大的响度差异。"), settings.loudnessEnabled),
@@ -757,19 +780,53 @@ extension EchoNativeAppStore {
     kind: String,
     value: String = "",
     boolValue: Any = NSNull(),
+    numberValue: Any = NSNull(),
+    minimumValue: Any = NSNull(),
+    maximumValue: Any = NSNull(),
+    stepValue: Any = NSNull(),
     options: [[String: Any]] = [],
     selection: Any = NSNull(),
     disabled: Bool = false
   ) -> [String: Any] {
-    ["boolValue": boolValue, "description": description, "disabled": disabled, "id": id, "kind": kind, "options": options, "selection": selection, "title": title, "value": value]
+    ["boolValue": boolValue, "description": description, "disabled": disabled, "id": id, "kind": kind, "maximumValue": maximumValue, "minimumValue": minimumValue, "numberValue": numberValue, "options": options, "selection": selection, "stepValue": stepValue, "title": title, "value": value]
   }
 
-  private func toggle(_ id: String, _ title: String, _ description: String, _ value: Bool) -> [String: Any] {
-    row(id, title, description, kind: "toggle", boolValue: value)
+  private func toggle(_ id: String, _ title: String, _ description: String, _ value: Bool, disabled: Bool = false) -> [String: Any] {
+    row(id, title, description, kind: "toggle", boolValue: value, disabled: disabled)
   }
 
   private func picker(_ id: String, _ title: String, _ description: String, _ selection: String, _ options: [[String: Any]], disabled: Bool = false) -> [String: Any] {
     row(id, title, description, kind: "picker", options: options, selection: selection, disabled: disabled)
+  }
+
+  private func slider(
+    _ id: String,
+    _ title: String,
+    _ description: String,
+    _ value: Double,
+    min: Double,
+    max: Double,
+    step: Double,
+    disabled: Bool = false
+  ) -> [String: Any] {
+    let label: String
+    if id == "desktopLyricsWidth" || id == "desktopLyricsHeight" {
+      label = "\(Int((value * 100).rounded()))%"
+    } else {
+      label = "\(Int(value.rounded())) pt"
+    }
+    return row(
+      id,
+      title,
+      description,
+      kind: "slider",
+      value: label,
+      numberValue: value,
+      minimumValue: min,
+      maximumValue: max,
+      stepValue: step,
+      disabled: disabled
+    )
   }
 
   private func action(_ id: String, _ title: String, _ description: String, disabled: Bool = false) -> [String: Any] {

@@ -275,8 +275,12 @@ private struct EchoNativeSettingRow: Decodable, Identifiable {
   let disabled: Bool
   let id: String
   let kind: String
+  let maximumValue: Double?
+  let minimumValue: Double?
+  var numberValue: Double?
   let options: [EchoNativePageOption]
   var selection: String?
+  let stepValue: Double?
   let title: String
   let value: String
 }
@@ -369,6 +373,9 @@ struct EchoNativePagesScreen: View {
   @State private var showStreamingLogoutConfirmation = false
   @State private var showNeteaseWebLogin = false
   @State private var showNeteaseQrSaveError = false
+  @State private var showDesktopLyricsBackgroundPicker = false
+  @State private var desktopLyricsBackgroundItem: PhotosPickerItem?
+  @State private var desktopLyricsBackgroundImportFailed = false
   @State private var selectedAlbumId = ""
   @State private var selectedAlbumArtworkUrl = ""
   @State private var selectedAlbumTitle = ""
@@ -451,6 +458,26 @@ struct EchoNativePagesScreen: View {
         onAction: onAction
       )
     }
+    .photosPicker(
+      isPresented: $showDesktopLyricsBackgroundPicker,
+      selection: $desktopLyricsBackgroundItem,
+      matching: .images
+    )
+    .onChange(of: desktopLyricsBackgroundItem) { item in
+      guard let item else { return }
+      Task {
+        defer { desktopLyricsBackgroundItem = nil }
+        guard
+          let data = try? await item.loadTransferable(type: Data.self),
+          let image = UIImage(data: data),
+          let encoded = desktopLyricsBackgroundData(image)
+        else {
+          desktopLyricsBackgroundImportFailed = true
+          return
+        }
+        onAction(["action": "desktopLyricsBackgroundImage", "data": encoded])
+      }
+    }
     .fullScreenCover(item: $pairingScannerTarget) { target in
       EchoPairingScannerSheet(
         language: model.payload?.language ?? "zh",
@@ -516,6 +543,12 @@ struct EchoNativePagesScreen: View {
       Text(model.payload?.language == "en"
         ? "Allow photo access, then try again."
         : "请允许添加照片权限后重试。")
+    }
+    .alert(
+      model.payload?.language == "en" ? "Could not import image" : "无法导入图片",
+      isPresented: $desktopLyricsBackgroundImportFailed
+    ) {
+      Button(model.payload?.language == "en" ? "OK" : "好", role: .cancel) {}
     }
     .onChange(of: scenePhase) { phase in
       if phase == .active, !(model.payload?.connection?.streaming.qrUrl ?? "").isEmpty {
@@ -2323,6 +2356,8 @@ struct EchoNativePagesScreen: View {
         .tint(echoAccent)
       }
       .padding(.vertical, 12)
+      .disabled(row.disabled)
+      .opacity(row.disabled ? 0.42 : 1)
     case "picker":
       VStack(alignment: .leading, spacing: 10) {
         settingText(row)
@@ -2337,6 +2372,37 @@ struct EchoNativePagesScreen: View {
             }
           )
         }
+      }
+      .padding(.vertical, 12)
+      .disabled(row.disabled)
+      .opacity(row.disabled ? 0.42 : 1)
+    case "slider":
+      let minimum = row.minimumValue ?? 0
+      let maximum = row.maximumValue ?? 1
+      let step = row.stepValue ?? 0.01
+      let current = currentSettingRow(row.id)?.numberValue ?? row.numberValue ?? minimum
+      VStack(alignment: .leading, spacing: 9) {
+        settingText(row)
+        Slider(
+          value: Binding(
+            get: { currentSettingRow(row.id)?.numberValue ?? row.numberValue ?? minimum },
+            set: { value in
+              updateSettingRow(row.id) { $0.numberValue = value }
+              onAction(["action": "settingNumber", "key": row.id, "value": value, "commit": false])
+            }
+          ),
+          in: minimum...maximum,
+          step: step,
+          onEditingChanged: { editing in
+            guard !editing else { return }
+            let value = currentSettingRow(row.id)?.numberValue ?? current
+            onAction(["action": "settingNumber", "key": row.id, "value": value, "commit": true])
+          }
+        )
+        Text(sliderValueLabel(row.id, value: currentSettingRow(row.id)?.numberValue ?? current))
+          .font(.system(size: 11, weight: .bold, design: .rounded))
+          .foregroundColor(echoAccent)
+          .frame(maxWidth: .infinity, alignment: .trailing)
       }
       .padding(.vertical, 12)
       .disabled(row.disabled)
@@ -2359,7 +2425,11 @@ struct EchoNativePagesScreen: View {
       .buttonStyle(.plain)
     case "action":
       Button {
-        onAction(["action": "settingAction", "key": row.id])
+        if row.id == "desktopLyricsImportBackground" {
+          showDesktopLyricsBackgroundPicker = true
+        } else {
+          onAction(["action": "settingAction", "key": row.id])
+        }
       } label: {
         HStack(spacing: 12) {
           settingText(row)
@@ -2395,6 +2465,21 @@ struct EchoNativePagesScreen: View {
           .foregroundColor(echoInk.opacity(0.48))
           .fixedSize(horizontal: false, vertical: true)
       }
+    }
+  }
+
+  private func sliderValueLabel(_ id: String, value: Double) -> String {
+    id == "desktopLyricsWidth" || id == "desktopLyricsHeight"
+      ? "\(Int((value * 100).rounded()))%"
+      : "\(Int(value.rounded())) pt"
+  }
+
+  private func desktopLyricsBackgroundData(_ image: UIImage) -> Data? {
+    let limit: CGFloat = 1_600
+    let scale = min(1, limit / max(image.size.width, image.size.height))
+    let size = CGSize(width: max(1, image.size.width * scale), height: max(1, image.size.height * scale))
+    return UIGraphicsImageRenderer(size: size).jpegData(withCompressionQuality: 0.86) { _ in
+      image.draw(in: CGRect(origin: .zero, size: size))
     }
   }
 

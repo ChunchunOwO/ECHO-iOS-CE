@@ -76,6 +76,8 @@ final class EchoNativeAppStore {
   weak var presenter: UIViewController?
 
   private let audioEngine = DspPlaybackEngine()
+  private let desktopLyricsController = EchoNativeDesktopLyricsController()
+  private var desktopLyricsBackgroundImage: UIImage?
   private var dacProfiles = EchoNativeDacObservation.load()
   private var lastDacObservationKey = ""
   private var signalPathVisible = false
@@ -127,6 +129,7 @@ final class EchoNativeAppStore {
   func start() {
     guard !started else { return }
     started = true
+    desktopLyricsBackgroundImage = loadDesktopLyricsBackgroundImage()
     applySettings()
     configureClients()
     startProgressClock()
@@ -139,6 +142,10 @@ final class EchoNativeAppStore {
       await loadNeteaseAccount()
       restoreQueue()
     }
+  }
+
+  func attachDesktopLyrics(to view: UIView) {
+    desktopLyricsController.attach(to: view)
   }
 
   func stop() {
@@ -163,6 +170,7 @@ final class EchoNativeAppStore {
     externalMetadataLoading = false
     updateLoadingState()
     audioEngine.stop()
+    desktopLyricsController.stop()
     nowPlayingController.clear()
   }
 
@@ -423,8 +431,10 @@ final class EchoNativeAppStore {
     case "streamingPlaylistPin": toggleStreamingPlaylist(payload, pinned: true)
     case "streamingPlaylistFavorite": toggleStreamingPlaylist(payload, pinned: false)
     case "streamingConnect": connectMode = "streaming"; playerModel.activePage = "connect"; renderPages()
+    case "desktopLyricsBackgroundImage": importDesktopLyricsBackground(payload["data"] as? Data)
     case "settingToggle": updateSettingToggle(payload)
     case "settingSelect": updateSettingSelection(payload)
+    case "settingNumber": updateSettingNumber(payload)
     case "settingAction": performSettingAction(payload)
     default: break
     }
@@ -435,6 +445,7 @@ final class EchoNativeAppStore {
     playerModel.activePage = settings.defaultPage
     playerModel.artworkBackgroundEnabled = settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = settings.darkModeEnabled
+    playerModel.desktopLyricsEnabled = settings.desktopLyricsEnabled
     playerModel.followSystemAppearance = settings.followSystemAppearance
     playerModel.language = settings.language
     playerModel.playbackMode = settings.playbackMode
@@ -454,6 +465,7 @@ final class EchoNativeAppStore {
     libraryView = librarySource == "local" ? settings.defaultLocalLibraryView : "songs"
     audioEngine.setEq(gains: settings.eqGains)
     audioEngine.setLoudness(settings.loudnessEnabled)
+    configureDesktopLyrics()
   }
 
   private func configureClients() {
@@ -714,6 +726,7 @@ final class EchoNativeAppStore {
       updateEstimatedRemotePosition(status: powerampStatus, receivedAt: powerampStatusReceivedAt)
     }
     updateActiveLyricIndex()
+    updateDesktopLyrics()
     publishNowPlaying()
   }
 
@@ -1143,6 +1156,7 @@ final class EchoNativeAppStore {
     updateLoadingState()
     nowPlayingController.clear()
     lastNowPlayingTrackKey = ""
+    updateDesktopLyrics()
   }
 
   private func updatePlayerTrack(_ track: EchoNativeCoreTrack) {
@@ -1887,6 +1901,12 @@ final class EchoNativeAppStore {
     case "followSystemAppearance": persistent.settings.followSystemAppearance = enabled; playerModel.followSystemAppearance = enabled
     case "loudness": persistent.settings.loudnessEnabled = enabled; playerModel.loudnessEnabled = enabled; audioEngine.setLoudness(enabled)
     case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = enabled
+    case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled; playerModel.desktopLyricsEnabled = enabled
+    case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = enabled
+    case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = enabled
+    case "desktopLyricsRainbowGradient": persistent.settings.desktopLyricsRainbowGradient = enabled
+    case "desktopLyricsTransitionAnimation": persistent.settings.desktopLyricsTransitionAnimation = enabled
+    case "desktopLyricsTimedReveal": persistent.settings.desktopLyricsTimedReveal = enabled
     case "autoQueueImports": persistent.settings.autoQueueImportedLocalTracks = enabled
     case "confirmDelete": persistent.settings.confirmBeforeDeletingLocalTracks = enabled
     case "artworkGlow": persistent.settings.showArtworkGlow = enabled; playerModel.showArtworkGlow = enabled
@@ -1909,6 +1929,7 @@ final class EchoNativeAppStore {
     default:
       if key.hasPrefix("audioTag.") { persistent.settings.audioTagVisibility[String(key.dropFirst(9))] = enabled }
     }
+    configureDesktopLyrics()
     persist(); renderPages()
   }
 
@@ -1932,9 +1953,29 @@ final class EchoNativeAppStore {
       if selection == "direct" { persistent.settings.neteaseApiBaseUrl = "https://music.163.com" }
       configureClients()
     case "manualAppearance": persistent.settings.darkModeEnabled = selection == "dark"; playerModel.darkModeEnabled = selection == "dark"
+    case "desktopLyricsAnimation": persistent.settings.desktopLyricsAnimation = selection
+    case "desktopLyricsBackground": persistent.settings.desktopLyricsBackground = selection
+    case "desktopLyricsPosition": persistent.settings.desktopLyricsPosition = selection
+    case "desktopLyricsSize": persistent.settings.desktopLyricsSize = selection
     default: break
     }
+    configureDesktopLyrics()
     persist(); renderPages()
+  }
+
+  private func updateSettingNumber(_ payload: [String: Any]) {
+    guard let key = payload["key"] as? String, let value = number(payload["value"]) else { return }
+    switch key {
+    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(18, min(48, value))
+    case "desktopLyricsWidth": persistent.settings.desktopLyricsWidthScale = max(0.2, min(1.0, value))
+    case "desktopLyricsHeight": persistent.settings.desktopLyricsHeightScale = max(0.33, min(1.0, value))
+    default: return
+    }
+    configureDesktopLyrics()
+    if payload["commit"] as? Bool == true {
+      persist()
+      renderPages()
+    }
   }
 
   private func performSettingAction(_ payload: [String: Any]) {
@@ -2039,6 +2080,7 @@ final class EchoNativeAppStore {
     let generation = lyricsGeneration
     playerModel.activeLyricIndex = 0
     playerModel.lyricLines = []
+    updateDesktopLyrics()
     lyricsTask = Task {
       var lyrics = ""
       lyrics = externalLyricsByTrackKey[trackKey(track)] ?? ""
@@ -2050,6 +2092,7 @@ final class EchoNativeAppStore {
       let lines = EchoNativeMetadataService.parseLyrics(lyrics)
       playerModel.lyricLines = lines
       updateActiveLyricIndex()
+      updateDesktopLyrics()
       if lyricsGeneration == generation { lyricsTask = nil }
     }
   }
@@ -2732,6 +2775,67 @@ final class EchoNativeAppStore {
       return
     }
     if playerModel.activeLyricIndex != index { playerModel.activeLyricIndex = index }
+  }
+
+  private func configureDesktopLyrics() {
+    let settings = persistent.settings
+    desktopLyricsController.configure(.init(
+      animation: settings.desktopLyricsAnimation,
+      background: settings.desktopLyricsBackground,
+      enabled: settings.desktopLyricsEnabled,
+      fontSize: settings.desktopLyricsFontSize,
+      heightScale: settings.desktopLyricsHeightScale,
+      onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
+      position: settings.desktopLyricsPosition,
+      rainbowGradient: settings.desktopLyricsRainbowGradient,
+      showMetadata: settings.desktopLyricsShowMetadata,
+      timedReveal: settings.desktopLyricsTimedReveal,
+      transitionAnimation: settings.desktopLyricsTransitionAnimation,
+      widthScale: settings.desktopLyricsWidthScale
+    ), importedBackgroundImage: desktopLyricsBackgroundImage)
+    updateDesktopLyrics()
+  }
+
+  private func updateDesktopLyrics() {
+    desktopLyricsController.update(
+      title: playerModel.title,
+      artist: playerModel.artist,
+      artworkURL: playerModel.artworkUrl,
+      lines: playerModel.lyricLines,
+      activeIndex: playerModel.activeLyricIndex,
+      isPlaying: playerModel.isPlaying,
+      durationMs: playerModel.durationMs,
+      positionMs: playerModel.positionMs
+    )
+  }
+
+  private var desktopLyricsBackgroundURL: URL? {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+      .appendingPathComponent("desktop-lyrics-background.jpg")
+  }
+
+  private func loadDesktopLyricsBackgroundImage() -> UIImage? {
+    desktopLyricsBackgroundURL.flatMap { try? Data(contentsOf: $0) }.flatMap(UIImage.init(data:))
+  }
+
+  private func importDesktopLyricsBackground(_ data: Data?) {
+    guard let data, let image = UIImage(data: data), let url = desktopLyricsBackgroundURL else {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = localized("The selected image could not be read.", "无法读取所选图片。")
+      return
+    }
+    do {
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try data.write(to: url, options: .atomic)
+      desktopLyricsBackgroundImage = image
+      persistent.settings.desktopLyricsBackground = "custom"
+      configureDesktopLyrics()
+      persist()
+      renderPages()
+    } catch {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = error.localizedDescription
+    }
   }
 
   private func persist() { EchoNativePersistence.save(persistent) }
