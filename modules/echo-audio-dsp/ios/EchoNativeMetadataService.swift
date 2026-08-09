@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum EchoNativeMetadataService {
@@ -31,13 +32,16 @@ enum EchoNativeMetadataService {
   static func candidates(
     for track: EchoNativeCoreTrack,
     sources: Sources,
-    includeNeteaseLyrics: Bool = true
+    includeNeteaseLyrics: Bool = true,
+    neteaseClient: EchoNativeNeteaseClient? = nil
   ) async throws -> [Candidate] {
     let values = await withTaskGroup(of: [Candidate].self) { group in
       if sources.lrcApi { group.addTask { (try? await lrcApiCandidates(for: track)) ?? [] } }
       if sources.lrclib { group.addTask { (try? await lrclibCandidates(for: track)) ?? [] } }
       if sources.netease {
-        group.addTask { (try? await neteaseCandidates(for: track, includeLyrics: includeNeteaseLyrics)) ?? [] }
+        group.addTask {
+          (try? await neteaseCandidates(for: track, includeLyrics: includeNeteaseLyrics, client: neteaseClient)) ?? []
+        }
       }
       var result: [Candidate] = []
       for await candidates in group { result.append(contentsOf: candidates) }
@@ -74,6 +78,44 @@ enum EchoNativeMetadataService {
       throw EchoNativeNetworkError.invalidResponse
     }
     return lyrics
+  }
+
+  static func artworkData(from rawUrl: String) async throws -> Data {
+    guard let url = secureMediaUrl(rawUrl) else { throw EchoNativeNetworkError.invalidResponse }
+    if url.isFileURL {
+      return try await Task.detached(priority: .utility) { try Data(contentsOf: url) }.value
+    }
+    var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+    request.setValue("image/*", forHTTPHeaderField: "Accept")
+    return try await responseData(for: request, maximumBytes: 12 * 1_024 * 1_024)
+  }
+
+  static func cacheLyrics(_ lyrics: String, for track: EchoNativeCoreTrack) -> URL? {
+    guard !lyrics.isEmpty, let data = lyrics.data(using: .utf8) else { return nil }
+    let key = "\(track.source.rawValue):\(track.id)"
+    let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+    let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("external-lyrics", isDirectory: true)
+    let url = directory.appendingPathComponent(digest).appendingPathExtension("lrc")
+    do {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      try data.write(to: url, options: .atomic)
+      return url
+    } catch {
+      return nil
+    }
+  }
+
+  static func text(from url: URL) async -> String {
+    if url.isFileURL {
+      return await Task.detached(priority: .utility) {
+        (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+      }.value
+    }
+    var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+    request.setValue("text/plain,*/*", forHTTPHeaderField: "Accept")
+    guard let data = try? await responseData(for: request, maximumBytes: 2 * 1_024 * 1_024) else { return "" }
+    return String(data: data, encoding: .utf8) ?? ""
   }
 
   static func parseLyrics(_ value: String) -> [LyricLine] {
@@ -195,7 +237,37 @@ enum EchoNativeMetadataService {
       }
   }
 
-  private static func neteaseCandidates(for track: EchoNativeCoreTrack, includeLyrics: Bool) async throws -> [Candidate] {
+  private static func neteaseCandidates(
+    for track: EchoNativeCoreTrack,
+    includeLyrics: Bool,
+    client: EchoNativeNeteaseClient?
+  ) async throws -> [Candidate] {
+    if let client {
+      let songs = try await client.search("\(track.title) \(track.artist)", limit: 8)
+        .filter { score($0.title, artist: $0.artist, track: track) > 0 }
+        .sorted { score($0.title, artist: $0.artist, track: track) > score($1.title, artist: $1.artist, track: track) }
+        .prefix(2)
+      return await withTaskGroup(of: Candidate?.self) { group in
+        for song in songs {
+          group.addTask {
+            let lyrics = includeLyrics ? ((try? await client.lyrics(trackId: song.id)) ?? "") : ""
+            guard song.artworkUrl?.isEmpty == false || !song.artist.isEmpty || !lyrics.isEmpty else { return nil }
+            return Candidate(
+              artist: song.artist,
+              artworkUrl: song.artworkUrl,
+              id: "netease:\(song.id)",
+              lyrics: lyrics,
+              source: "netease",
+              sourceLabel: "NetEase Cloud Music",
+              title: song.title
+            )
+          }
+        }
+        var result: [Candidate] = []
+        for await candidate in group { if let candidate { result.append(candidate) } }
+        return result
+      }
+    }
     struct Search: Decodable {
       struct SearchResult: Decodable { let songs: [Song]? }
       struct Song: Decodable {
@@ -246,7 +318,7 @@ enum EchoNativeMetadataService {
         lyric = nil
       }
       let artist = song.artists?.compactMap(\.name).joined(separator: ", ")
-      let artwork = detail?.songs?.first?.album?.picUrl
+      let artwork = detail?.songs?.first?.album?.picUrl.flatMap { secureMediaUrl($0)?.absoluteString }
       let lyrics = [lyric?.lrc?.lyric, lyric?.tlyric?.lyric]
         .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
         .filter { !$0.isEmpty }
@@ -270,11 +342,58 @@ enum EchoNativeMetadataService {
     var request = URLRequest(url: url, timeoutInterval: 15)
     request.setValue("ECHO-iPhone/0.5", forHTTPHeaderField: "User-Agent")
     if netease { request.setValue("https://music.163.com/", forHTTPHeaderField: "Referer") }
-    let (data, response) = try await URLSession.shared.data(for: request)
-    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-      throw EchoNativeNetworkError.invalidResponse
-    }
+    let data = try await responseData(for: request, maximumBytes: 6 * 1_024 * 1_024)
     return try JSONDecoder().decode(T.self, from: data)
+  }
+
+  private enum RetryableResponse: Error { case status }
+
+  private static let session: URLSession = {
+    let configuration = URLSessionConfiguration.default
+    configuration.timeoutIntervalForRequest = 15
+    configuration.timeoutIntervalForResource = 30
+    configuration.waitsForConnectivity = true
+    configuration.urlCache = URLCache(
+      memoryCapacity: 8 * 1_024 * 1_024,
+      diskCapacity: 64 * 1_024 * 1_024,
+      diskPath: "echo-native-metadata"
+    )
+    return URLSession(configuration: configuration)
+  }()
+
+  private static func responseData(for request: URLRequest, maximumBytes: Int) async throws -> Data {
+    for attempt in 0..<2 {
+      do {
+        try Task.checkCancellation()
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw EchoNativeNetworkError.invalidResponse }
+        if http.statusCode == 429 || (500...599).contains(http.statusCode) { throw RetryableResponse.status }
+        guard (200..<300).contains(http.statusCode), data.count <= maximumBytes else {
+          throw EchoNativeNetworkError.invalidResponse
+        }
+        return data
+      } catch is RetryableResponse {
+        guard attempt == 0 else { throw EchoNativeNetworkError.invalidResponse }
+      } catch let error as URLError {
+        let transient: Set<URLError.Code> = [
+          .cannotConnectToHost, .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet,
+          .resourceUnavailable, .timedOut,
+        ]
+        guard attempt == 0, transient.contains(error.code) else { throw error }
+      }
+      try await Task.sleep(nanoseconds: 400_000_000)
+    }
+    throw EchoNativeNetworkError.invalidResponse
+  }
+
+  private static func secureMediaUrl(_ rawValue: String) -> URL? {
+    guard var components = URLComponents(string: rawValue) else { return nil }
+    if components.scheme == "http", let host = components.host?.lowercased(),
+      host == "music.126.net" || host.hasSuffix(".music.126.net")
+        || host == "music.163.com" || host.hasSuffix(".music.163.com") {
+      components.scheme = "https"
+    }
+    return components.url
   }
 
   private static func score(_ title: String, artist: String, track: EchoNativeCoreTrack) -> Int {

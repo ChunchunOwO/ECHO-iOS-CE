@@ -2,10 +2,18 @@ import AVFoundation
 import AudioToolbox
 import CryptoKit
 import Foundation
+import ImageIO
 import UniformTypeIdentifiers
 import UIKit
 
 enum EchoNativeLocalLibrary {
+  private struct EmbeddedMetadata: Codable, Sendable {
+    var artist: String?
+    var artworkFile: String?
+    var artworkRemoteUrl: String?
+    var lyricsEmbedded = false
+  }
+
   private static let audioExtensions = Set(["aac", "aiff", "alac", "caf", "flac", "m4a", "mp3", "mp4", "wav"])
 
   static var directory: URL {
@@ -56,6 +64,74 @@ enum EchoNativeLocalLibrary {
     }
     try FileManager.default.removeItem(at: url)
     try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("lrc"))
+    try? FileManager.default.removeItem(at: embeddedMetadataUrl(for: url))
+    try? FileManager.default.removeItem(at: embeddedArtworkUrl(for: url, extensionName: "jpg"))
+    try? FileManager.default.removeItem(at: embeddedArtworkUrl(for: url, extensionName: "png"))
+  }
+
+  static func needsExternalMetadataEmbedding(_ track: EchoNativeCoreTrack) -> Bool {
+    guard track.source == .local, let raw = track.localUrl, let audioUrl = URL(string: raw), audioUrl.isFileURL else {
+      return false
+    }
+    let embedded = embeddedMetadata(for: audioUrl)
+    if let artist = track.externalArtist, !artist.isEmpty, embedded?.artist != artist { return true }
+    if let artwork = track.externalArtworkUrl, !artwork.isEmpty {
+      guard let file = embedded?.artworkFile else { return true }
+      if !FileManager.default.fileExists(atPath: audioUrl.deletingLastPathComponent().appendingPathComponent(file).path) {
+        return true
+      }
+    }
+    let lyricsUrl = audioUrl.deletingPathExtension().appendingPathExtension("lrc")
+    return (track.externalLyrics?.isEmpty == false || track.externalLyricsUrl?.isEmpty == false)
+      && !FileManager.default.fileExists(atPath: lyricsUrl.path)
+  }
+
+  static func embedExternalMetadata(for track: EchoNativeCoreTrack) async throws -> EchoNativeCoreTrack {
+    guard track.source == .local, let raw = track.localUrl, let audioUrl = URL(string: raw), audioUrl.isFileURL,
+      audioUrl.standardizedFileURL.path.hasPrefix(directory.standardizedFileURL.path + "/")
+    else { return track }
+
+    var artworkData: Data?
+    if let rawArtworkUrl = track.externalArtworkUrl, !rawArtworkUrl.isEmpty {
+      artworkData = try? await EchoNativeMetadataService.artworkData(from: rawArtworkUrl)
+    }
+    var cachedLyrics = track.externalLyrics
+    if let rawLyricsUrl = track.externalLyricsUrl, let lyricsUrl = URL(string: rawLyricsUrl) {
+      let value = await EchoNativeMetadataService.text(from: lyricsUrl)
+      if !value.isEmpty { cachedLyrics = value }
+    }
+
+    return try await Task.detached(priority: .utility) {
+      let manager = FileManager.default
+      var embedded = embeddedMetadata(for: audioUrl) ?? EmbeddedMetadata()
+      if let artist = track.externalArtist, !artist.isEmpty { embedded.artist = artist }
+
+      if let artworkData,
+        let source = CGImageSourceCreateWithData(artworkData as CFData, nil),
+        let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+          kCGImageSourceCreateThumbnailFromImageAlways: true,
+          kCGImageSourceCreateThumbnailWithTransform: true,
+          kCGImageSourceThumbnailMaxPixelSize: 1_600,
+        ] as CFDictionary) {
+        let artworkUrl = embeddedArtworkUrl(for: audioUrl, extensionName: "jpg")
+        if let normalizedData = UIImage(cgImage: thumbnail).jpegData(compressionQuality: 0.9) {
+          try normalizedData.write(to: artworkUrl, options: .atomic)
+          embedded.artworkFile = artworkUrl.lastPathComponent
+          embedded.artworkRemoteUrl = track.externalArtworkUrl
+          let obsolete = embeddedArtworkUrl(for: audioUrl, extensionName: "png")
+          try? manager.removeItem(at: obsolete)
+        }
+      }
+
+      let lyricsUrl = audioUrl.deletingPathExtension().appendingPathExtension("lrc")
+      if !manager.fileExists(atPath: lyricsUrl.path), let cachedLyrics, !cachedLyrics.isEmpty {
+        try Data(cachedLyrics.utf8).write(to: lyricsUrl, options: .atomic)
+        embedded.lyricsEmbedded = true
+      }
+      let metadataData = try JSONEncoder().encode(embedded)
+      try metadataData.write(to: embeddedMetadataUrl(for: audioUrl), options: .atomic)
+      return EchoNativeLocalLibrary.track(url: audioUrl)
+    }.value
   }
 
   @MainActor
@@ -78,6 +154,7 @@ enum EchoNativeLocalLibrary {
   private static func track(url: URL) -> EchoNativeCoreTrack {
     let asset = AVURLAsset(url: url)
     let metadata = asset.commonMetadata
+    let embedded = embeddedMetadata(for: url)
     let duration = CMTimeGetSeconds(asset.duration)
     let title = stringValue(.commonIdentifierTitle, in: metadata)
       ?? url.deletingPathExtension().lastPathComponent.replacingOccurrences(
@@ -85,7 +162,8 @@ enum EchoNativeLocalLibrary {
         with: "",
         options: .regularExpression
       )
-    let artist = stringValue(.commonIdentifierArtist, in: metadata) ?? ""
+    let nativeArtist = stringValue(.commonIdentifierArtist, in: metadata) ?? ""
+    let artist = nativeArtist.isEmpty ? embedded?.artist ?? "" : nativeArtist
     let album = stringValue(.commonIdentifierAlbumName, in: metadata) ?? ""
     let albumArtist = stringValue(markers: ["albumartist", "album artist", "tpe2", "aart"], in: asset.metadata) ?? ""
     let audioTrack = asset.tracks(withMediaType: .audio).first
@@ -93,7 +171,11 @@ enum EchoNativeLocalLibrary {
     let bitDepthValue = streamDescription(audioTrack)?.mBitsPerChannel ?? 0
     let resources = try? url.resourceValues(forKeys: [.fileSizeKey])
     let lyricsUrl = url.deletingPathExtension().appendingPathExtension("lrc")
-    let artworkUrl = artwork(in: metadata, sourceUrl: url)
+    let embeddedArtworkUrl = embedded?.artworkFile.map {
+      url.deletingLastPathComponent().appendingPathComponent($0).absoluteString
+    }
+    let nativeArtworkUrl = artwork(in: metadata, sourceUrl: url)
+    let artworkUrl = nativeArtworkUrl ?? embeddedArtworkUrl
     return EchoNativeCoreTrack(
       album: album,
       albumArtist: albumArtist,
@@ -105,6 +187,11 @@ enum EchoNativeLocalLibrary {
       codec: url.pathExtension.uppercased(),
       discNo: numberValue(markers: ["disk", "disc", "tpos"], in: asset.metadata),
       durationMs: duration.isFinite && duration > 0 ? duration * 1000 : 0,
+      externalArtist: nativeArtist.isEmpty ? embedded?.artist : nil,
+      externalArtworkUrl: nativeArtworkUrl == nil ? (embeddedArtworkUrl ?? embedded?.artworkRemoteUrl) : nil,
+      externalLyricsUrl: embedded?.lyricsEmbedded == true && FileManager.default.fileExists(atPath: lyricsUrl.path)
+        ? lyricsUrl.absoluteString
+        : nil,
       fileName: url.lastPathComponent,
       fileSize: Int64(resources?.fileSize ?? 0),
       hasLyrics: FileManager.default.fileExists(atPath: lyricsUrl.path),
@@ -172,6 +259,19 @@ enum EchoNativeLocalLibrary {
       try? data.write(to: destination, options: .atomic)
     }
     return destination.absoluteString
+  }
+
+  private static func embeddedMetadata(for audioUrl: URL) -> EmbeddedMetadata? {
+    guard let data = try? Data(contentsOf: embeddedMetadataUrl(for: audioUrl)) else { return nil }
+    return try? JSONDecoder().decode(EmbeddedMetadata.self, from: data)
+  }
+
+  private static func embeddedMetadataUrl(for audioUrl: URL) -> URL {
+    audioUrl.appendingPathExtension("echo-metadata.json")
+  }
+
+  private static func embeddedArtworkUrl(for audioUrl: URL, extensionName: String) -> URL {
+    audioUrl.appendingPathExtension("echo-artwork.\(extensionName)")
   }
 
   private static func sanitized(_ name: String) -> String {

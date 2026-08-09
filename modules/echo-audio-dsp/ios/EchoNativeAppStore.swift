@@ -1,3 +1,4 @@
+import CoreText
 import Foundation
 import UIKit
 
@@ -90,6 +91,8 @@ final class EchoNativeAppStore {
   private var powerampClient: EchoNativeRemoteClient?
   private var neteaseClient: EchoNativeNeteaseClient?
   private var neteaseClientConfiguration = ""
+  private var metadataNeteaseClient: EchoNativeNeteaseClient?
+  private var metadataNeteaseClientConfiguration = ""
   private var echoStatus: EchoNativePlaybackStatus?
   private var powerampStatus: EchoNativePlaybackStatus?
   private var echoStatusReceivedAt = Date()
@@ -101,7 +104,9 @@ final class EchoNativeAppStore {
   private var playbackLoadTask: Task<Void, Never>?
   private var lyricsTask: Task<Void, Never>?
   private var metadataTask: Task<Void, Never>?
+  private var metadataRetryTask: Task<Void, Never>?
   private var libraryArtworkTask: Task<Void, Never>?
+  private var localMetadataEmbeddingTask: Task<Void, Never>?
   private var streamingQrTask: Task<Void, Never>?
   private var handledFinishedTrackKey = ""
   private var playbackGeneration = 0
@@ -116,10 +121,10 @@ final class EchoNativeAppStore {
   private var externalMetadataLoading = false
   private var externalMetadataCandidates: [EchoNativeMetadataService.Candidate] = []
   private var externalMetadataTrackKey = ""
-  private var externalLyricsByTrackKey: [String: String] = [:]
+  private var metadataRetryAttempts: [String: Int] = [:]
+  private var pendingLocalMetadataEmbeddings: [String: EchoNativeCoreTrack] = [:]
   private var libraryArtworkLookupKeys = Set<String>()
   private var ignoredExternalMetadataTrackKeys = Set<String>()
-  private var failedArtworkUrls = Set<String>()
   private var lastNowPlayingPosition = -1.0
   private var lastNowPlayingState = false
   private var lastNowPlayingTrackKey = ""
@@ -130,6 +135,7 @@ final class EchoNativeAppStore {
     guard !started else { return }
     started = true
     desktopLyricsBackgroundImage = loadDesktopLyricsBackgroundImage()
+    registerStoredAppearanceFont()
     applySettings()
     configureClients()
     startProgressClock()
@@ -159,12 +165,17 @@ final class EchoNativeAppStore {
     playbackLoadTask?.cancel()
     lyricsTask?.cancel()
     metadataTask?.cancel()
+    metadataRetryTask?.cancel()
     libraryArtworkTask?.cancel()
+    localMetadataEmbeddingTask?.cancel()
     streamingQrTask?.cancel()
     playbackLoadTask = nil
     lyricsTask = nil
     metadataTask = nil
+    metadataRetryTask = nil
     libraryArtworkTask = nil
+    localMetadataEmbeddingTask = nil
+    pendingLocalMetadataEmbeddings.removeAll()
     streamingQrTask = nil
     audioLoading = false
     externalMetadataLoading = false
@@ -172,6 +183,7 @@ final class EchoNativeAppStore {
     audioEngine.stop()
     desktopLyricsController.stop()
     nowPlayingController.clear()
+    EchoNativeWidgetBridge.clear()
   }
 
   func migrateLegacy(payloadJSON: String) {
@@ -213,6 +225,7 @@ final class EchoNativeAppStore {
     case "page":
       guard let page = payload["page"] as? String else { return }
       playerModel.activePage = page
+      if persistent.settings.hapticsEnabled { UISelectionFeedbackGenerator().selectionChanged() }
       scheduleStreamingSearchIfNeeded()
       renderPages()
     case "playPause": togglePlayPause()
@@ -269,7 +282,7 @@ final class EchoNativeAppStore {
     case "externalFieldSourcesSelect": applyExternalMetadataSelection(payload)
     case "externalSourcePickerDismiss": clearExternalMetadataPicker()
     case "externalSourcePickerIgnore": ignoreExternalMetadataPicker()
-    case "artworkError": handleArtworkError(payload["url"] as? String ?? "")
+    case "artworkError": break
     case "queuePlay", "trackPlay":
       guard let id = payload["id"] as? String else { return }
       let source = (payload["source"] as? String).flatMap(EchoNativeTrackSource.init(rawValue:))
@@ -406,7 +419,7 @@ final class EchoNativeAppStore {
     case "streamingLogout":
       clearNeteaseQrLogin()
       EchoNativePersistence.setNeteaseCookie("")
-      neteaseClient = nil; neteaseClientConfiguration = ""; neteaseProfile = nil; neteasePlaylists = []; neteaseTracks = []; neteaseSearchTracks = []; streamingStatus = ""; streamingSearchStatus = ""; renderPages()
+      neteaseClient = nil; neteaseClientConfiguration = ""; neteaseProfile = nil; neteasePlaylists = []; neteaseTracks = []; neteaseSearchTracks = []; persistent.streamingRecommendedTracks = []; persistent.streamingRecommendationDate = ""; streamingStatus = ""; streamingSearchStatus = ""; persist(); renderPages()
     case "streamingLogin": startNeteaseQrLogin()
     case "streamingQrResume": resumeNeteaseQrLogin()
     case "streamingLibraryMode":
@@ -430,11 +443,16 @@ final class EchoNativeAppStore {
       renderPages()
     case "streamingPlaylistPin": toggleStreamingPlaylist(payload, pinned: true)
     case "streamingPlaylistFavorite": toggleStreamingPlaylist(payload, pinned: false)
+    case "streamingRecommendationsRefresh":
+      Task { await refreshDailyRecommendations(force: true) }
     case "streamingConnect": connectMode = "streaming"; playerModel.activePage = "connect"; renderPages()
     case "desktopLyricsBackgroundImage": importDesktopLyricsBackground(payload["data"] as? Data)
+    case "appearanceBackgroundImage": importAppearanceBackground(payload["data"] as? Data)
+    case "appearanceFont": importAppearanceFont(payload["data"] as? Data)
     case "settingToggle": updateSettingToggle(payload)
     case "settingSelect": updateSettingSelection(payload)
     case "settingNumber": updateSettingNumber(payload)
+    case "settingReset": resetSetting(payload["key"] as? String ?? "")
     case "settingAction": performSettingAction(payload)
     default: break
     }
@@ -443,6 +461,7 @@ final class EchoNativeAppStore {
   private func applySettings() {
     let settings = persistent.settings
     playerModel.activePage = settings.defaultPage
+    applyAppearanceSettings()
     playerModel.artworkBackgroundEnabled = settings.artworkBackgroundEnabled
     playerModel.darkModeEnabled = settings.darkModeEnabled
     playerModel.desktopLyricsEnabled = settings.desktopLyricsEnabled
@@ -492,6 +511,13 @@ final class EchoNativeAppStore {
       ? "https://music.163.com"
       : persistent.settings.neteaseApiBaseUrl
     let configuration = cookie.isEmpty ? "" : "\(baseUrl)\u{0}\(cookie)"
+    let metadataConfiguration = "\(baseUrl)\u{0}\(cookie)"
+    if metadataConfiguration != metadataNeteaseClientConfiguration {
+      metadataNeteaseClientConfiguration = metadataConfiguration
+      metadataNeteaseClient = URL(string: baseUrl)?.host == nil
+        ? nil
+        : EchoNativeNeteaseClient(baseUrl: baseUrl, cookie: cookie)
+    }
     if configuration != neteaseClientConfiguration || (!configuration.isEmpty && neteaseClient == nil) {
       streamingBusy = false
       if configuration != neteaseClientConfiguration {
@@ -557,7 +583,7 @@ final class EchoNativeAppStore {
         let loadedAlbumTracks = collectionTrackKeys
           .filter { $0.key.hasPrefix("echo:album-id:") }
           .flatMap { $0.value.compactMap(track(forKey:)) }
-        let refreshedTracks = values.1.map(resolvedTrack)
+        let refreshedTracks = values.1.map { resolvedTrack($0, includeLibraryFallback: false) }
         var refreshedIds = Set(refreshedTracks.map(\.id))
         echoTracks = refreshedTracks + loadedAlbumTracks.filter { refreshedIds.insert($0.id).inserted }
         applyRemoteStatus(values.0, kind: .echo)
@@ -594,7 +620,7 @@ final class EchoNativeAppStore {
         guard self.powerampClient === powerampClient else { return }
         powerampAlbums = values.2
         powerampTracks = values.1
-        powerampTracks = powerampTracks.map(resolvedTrack)
+        powerampTracks = powerampTracks.map { resolvedTrack($0, includeLibraryFallback: false) }
         applyRemoteStatus(values.0, kind: .poweramp)
       } else {
         let status = try await powerampClient.status()
@@ -615,7 +641,9 @@ final class EchoNativeAppStore {
   func refreshLocalLibrary() async {
     localBusy = true
     renderPages()
-    localTracks = await EchoNativeLocalLibrary.scan()
+    let scannedTracks = await EchoNativeLocalLibrary.scan()
+    localTracks = scannedTracks.map { resolvedTrack($0, includeLibraryFallback: false) }
+    localTracks.filter(EchoNativeLocalLibrary.needsExternalMetadataEmbedding).forEach(scheduleLocalMetadataEmbedding)
     localBusy = false
     renderPages()
   }
@@ -645,7 +673,6 @@ final class EchoNativeAppStore {
         track.artworkUrl = URL(string: artwork, relativeTo: baseUrl)?.absoluteURL.absoluteString
       }
       track = resolvedTrack(track)
-      if let artwork = track.artworkUrl, failedArtworkUrls.contains(artwork) { track.artworkUrl = nil }
       if let currentTrack, trackKey(currentTrack) == trackKey(track) {
         if track.artworkUrl?.isEmpty != false { track.artworkUrl = currentTrack.artworkUrl }
         if track.artist.isEmpty { track.artist = currentTrack.artist }
@@ -686,7 +713,6 @@ final class EchoNativeAppStore {
         if let artwork = value.artworkUrl, let baseUrl {
           value.artworkUrl = URL(string: artwork, relativeTo: baseUrl)?.absoluteURL.absoluteString
         }
-        if let artwork = value.artworkUrl, failedArtworkUrls.contains(artwork) { value.artworkUrl = nil }
         return value
       }
       if queue != nextQueue { queue = nextQueue; queueChanged = true }
@@ -711,7 +737,11 @@ final class EchoNativeAppStore {
         playerModel.positionMs = status.currentTime * 1000
         setIfChanged(playerModel, \.durationMs, status.duration * 1000)
         setIfChanged(playerModel, \.isPlaying, status.playing)
-        refreshEngineSignalMetrics(status, includeLevels: signalPathVisible)
+        refreshEngineSignalMetrics(
+          status,
+          includeLevels: signalPathVisible
+            || persistent.settings.desktopLyricsEnabled && persistent.settings.desktopLyricsVisualizer != "off"
+        )
         if status.didJustFinish, let currentTrack {
           let key = trackKey(currentTrack)
           if handledFinishedTrackKey != key {
@@ -781,6 +811,9 @@ final class EchoNativeAppStore {
     metadataGeneration &+= 1
     metadataTask?.cancel()
     metadataTask = nil
+    metadataRetryTask?.cancel()
+    metadataRetryTask = nil
+    metadataRetryAttempts[trackKey(track)] = 0
     externalMetadataLoading = false
     updateLoadingState()
     let mode = forcedMode ?? modeForTrack(track)
@@ -1135,6 +1168,8 @@ final class EchoNativeAppStore {
     metadataGeneration &+= 1
     metadataTask?.cancel()
     metadataTask = nil
+    metadataRetryTask?.cancel()
+    metadataRetryTask = nil
     audioLoading = false
     externalMetadataLoading = false
     audioEngine.stop()
@@ -1156,6 +1191,7 @@ final class EchoNativeAppStore {
     updateLoadingState()
     nowPlayingController.clear()
     lastNowPlayingTrackKey = ""
+    EchoNativeWidgetBridge.clear()
     updateDesktopLyrics()
   }
 
@@ -1190,6 +1226,7 @@ final class EchoNativeAppStore {
       position: position,
       isPlaying: playerModel.isPlaying
     )
+    EchoNativeWidgetBridge.publish(title: track.title, artist: track.artist, isPlaying: playerModel.isPlaying)
   }
 
   private func handleRemoteCommand(_ command: NowPlayingRemoteCommand, position: Double?) {
@@ -1506,7 +1543,6 @@ final class EchoNativeAppStore {
     persistent.favoriteTrackKeys.remove(key)
     persistent.recentTrackKeys.removeAll { $0 == key }
     persistent.recentTracks.removeAll { trackKey($0) == key }
-    externalLyricsByTrackKey.removeValue(forKey: key)
     if wasCurrent { clearCurrentPlayback() }
     synchronizeActivePlaylist()
     persistQueue(); updateQueueModel(); renderPages()
@@ -1785,6 +1821,7 @@ final class EchoNativeAppStore {
       streamingStatus = ""
       renderPages()
       scheduleStreamingSearchIfNeeded()
+      await refreshDailyRecommendations(force: false)
     } catch {
       if self.neteaseClient === neteaseClient { streamingStatus = errorMessage(error) }
       return
@@ -1796,6 +1833,28 @@ final class EchoNativeAppStore {
       streamingStatus = ""
     } catch {
       if self.neteaseClient === neteaseClient { streamingStatus = errorMessage(error) }
+    }
+  }
+
+  private func refreshDailyRecommendations(force: Bool) async {
+    guard let neteaseClient, neteaseProfile != nil else { return }
+    let components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+    let today = String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+    guard force || persistent.streamingRecommendationDate != today
+      || persistent.streamingRecommendedTracks.isEmpty else { return }
+    if force { streamingBusy = true; renderPages() }
+    defer {
+      if force, self.neteaseClient === neteaseClient { streamingBusy = false; renderPages() }
+    }
+    do {
+      let tracks = try await neteaseClient.dailyRecommendations()
+      guard self.neteaseClient === neteaseClient, !tracks.isEmpty else { return }
+      persistent.streamingRecommendedTracks = tracks
+      persistent.streamingRecommendationDate = today
+      persist()
+      renderPages()
+    } catch {
+      if force, self.neteaseClient === neteaseClient { streamingStatus = errorMessage(error) }
     }
   }
 
@@ -1899,6 +1958,9 @@ final class EchoNativeAppStore {
     guard let key = payload["key"] as? String, let enabled = payload["enabled"] as? Bool else { return }
     switch key {
     case "followSystemAppearance": persistent.settings.followSystemAppearance = enabled; playerModel.followSystemAppearance = enabled
+    case "artworkMotion": persistent.settings.artworkMotionEnabled = enabled
+    case "backgroundMotion": persistent.settings.backgroundMotionEnabled = enabled
+    case "haptics": persistent.settings.hapticsEnabled = enabled
     case "loudness": persistent.settings.loudnessEnabled = enabled; playerModel.loudnessEnabled = enabled; audioEngine.setLoudness(enabled)
     case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = enabled
     case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled; playerModel.desktopLyricsEnabled = enabled
@@ -1914,6 +1976,17 @@ final class EchoNativeAppStore {
     case "playerOutputInMenu": persistent.settings.showPlayerOutputInMenu = enabled; playerModel.showPlayerOutputInMenu = enabled
     case "externalMetadataSearch":
       persistent.settings.externalMetadataEnabled = enabled
+      if enabled {
+        refreshExternalMetadata(manual: false)
+      } else {
+        metadataGeneration &+= 1
+        metadataTask?.cancel()
+        metadataTask = nil
+        metadataRetryTask?.cancel()
+        metadataRetryTask = nil
+        externalMetadataLoading = false
+        updateLoadingState()
+      }
       resetLibraryArtworkLookup()
     case "externalMetadataSkipExisting": persistent.settings.externalMetadataSkipExisting = enabled
     case "lrcapi":
@@ -1929,6 +2002,7 @@ final class EchoNativeAppStore {
     default:
       if key.hasPrefix("audioTag.") { persistent.settings.audioTagVisibility[String(key.dropFirst(9))] = enabled }
     }
+    applyAppearanceSettings()
     configureDesktopLyrics()
     persist(); renderPages()
   }
@@ -1942,6 +2016,10 @@ final class EchoNativeAppStore {
       playerModel.equalizer.language = selection
       pagesModel.equalizer.language = selection
     case "defaultPage": persistent.settings.defaultPage = selection
+    case "appearanceBackground": persistent.settings.appearanceBackground = selection
+    case "appearancePattern": persistent.settings.appearancePattern = selection
+    case "motionStyle": persistent.settings.motionStyle = selection
+    case "themeColor": persistent.settings.themeColorHex = selection
     case "defaultLibrarySource": persistent.settings.defaultLibrarySource = selection; librarySource = selection; resetLibraryPosition()
     case "defaultLocalView":
       persistent.settings.defaultLocalLibraryView = selection
@@ -1957,8 +2035,10 @@ final class EchoNativeAppStore {
     case "desktopLyricsBackground": persistent.settings.desktopLyricsBackground = selection
     case "desktopLyricsPosition": persistent.settings.desktopLyricsPosition = selection
     case "desktopLyricsSize": persistent.settings.desktopLyricsSize = selection
+    case "desktopLyricsVisualizer": persistent.settings.desktopLyricsVisualizer = selection
     default: break
     }
+    applyAppearanceSettings()
     configureDesktopLyrics()
     persist(); renderPages()
   }
@@ -1969,8 +2049,10 @@ final class EchoNativeAppStore {
     case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = max(18, min(48, value))
     case "desktopLyricsWidth": persistent.settings.desktopLyricsWidthScale = max(0.2, min(1.0, value))
     case "desktopLyricsHeight": persistent.settings.desktopLyricsHeightScale = max(0.33, min(1.0, value))
+    case "fontScale": persistent.settings.fontScale = max(0.85, min(1.25, value))
     default: return
     }
+    applyAppearanceSettings()
     configureDesktopLyrics()
     if payload["commit"] as? Bool == true {
       persist()
@@ -1986,6 +2068,80 @@ final class EchoNativeAppStore {
     case "clearRecent": persistent.recentTrackKeys = []; persistent.recentTracks = []; persist(); renderPages()
     default: break
     }
+  }
+
+  private func resetSetting(_ key: String) {
+    let defaults = EchoNativeCoreSettings()
+    switch key {
+    case "language": persistent.settings.language = defaults.language
+    case "defaultPage": persistent.settings.defaultPage = defaults.defaultPage
+    case "followSystemAppearance": persistent.settings.followSystemAppearance = defaults.followSystemAppearance
+    case "manualAppearance": persistent.settings.darkModeEnabled = defaults.darkModeEnabled
+    case "appearanceBackground": persistent.settings.appearanceBackground = defaults.appearanceBackground
+    case "appearancePattern": persistent.settings.appearancePattern = defaults.appearancePattern
+    case "themeColor": persistent.settings.themeColorHex = defaults.themeColorHex
+    case "customFont": persistent.settings.customFontName = defaults.customFontName
+    case "fontScale": persistent.settings.fontScale = defaults.fontScale
+    case "motionStyle": persistent.settings.motionStyle = defaults.motionStyle
+    case "artworkMotion": persistent.settings.artworkMotionEnabled = defaults.artworkMotionEnabled
+    case "backgroundMotion": persistent.settings.backgroundMotionEnabled = defaults.backgroundMotionEnabled
+    case "haptics": persistent.settings.hapticsEnabled = defaults.hapticsEnabled
+    case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = defaults.desktopLyricsEnabled
+    case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = defaults.desktopLyricsOnlyWhilePlaying
+    case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = defaults.desktopLyricsShowMetadata
+    case "desktopLyricsBackground": persistent.settings.desktopLyricsBackground = defaults.desktopLyricsBackground
+    case "desktopLyricsVisualizer": persistent.settings.desktopLyricsVisualizer = defaults.desktopLyricsVisualizer
+    case "desktopLyricsAnimation": persistent.settings.desktopLyricsAnimation = defaults.desktopLyricsAnimation
+    case "desktopLyricsTransitionAnimation": persistent.settings.desktopLyricsTransitionAnimation = defaults.desktopLyricsTransitionAnimation
+    case "desktopLyricsTimedReveal": persistent.settings.desktopLyricsTimedReveal = defaults.desktopLyricsTimedReveal
+    case "desktopLyricsRainbowGradient": persistent.settings.desktopLyricsRainbowGradient = defaults.desktopLyricsRainbowGradient
+    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = defaults.desktopLyricsFontSize
+    case "desktopLyricsWidth": persistent.settings.desktopLyricsWidthScale = defaults.desktopLyricsWidthScale
+    case "desktopLyricsHeight": persistent.settings.desktopLyricsHeightScale = defaults.desktopLyricsHeightScale
+    case "desktopLyricsPosition": persistent.settings.desktopLyricsPosition = defaults.desktopLyricsPosition
+    case "eq":
+      persistent.settings.eqGains = defaults.eqGains
+      persistent.settings.eqPreset = defaults.eqPreset
+      playerModel.equalizer.gains = defaults.eqGains
+      playerModel.equalizer.preset = defaults.eqPreset
+      pagesModel.equalizer.gains = defaults.eqGains
+      pagesModel.equalizer.preset = defaults.eqPreset
+      audioEngine.setEq(gains: defaults.eqGains)
+    case "loudness": persistent.settings.loudnessEnabled = defaults.loudnessEnabled; audioEngine.setLoudness(defaults.loudnessEnabled)
+    case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = defaults.autoOpenLyricsForLocalTracks
+    case "artworkGlow": persistent.settings.showArtworkGlow = defaults.showArtworkGlow
+    case "playerOutputInMenu": persistent.settings.showPlayerOutputInMenu = defaults.showPlayerOutputInMenu
+    case "externalMetadataSearch": persistent.settings.externalMetadataEnabled = defaults.externalMetadataEnabled
+    case "externalMetadataSkipExisting": persistent.settings.externalMetadataSkipExisting = defaults.externalMetadataSkipExisting
+    case "externalSelectionMode": persistent.settings.externalDataSelectionMode = defaults.externalDataSelectionMode
+    case "lrcapi": persistent.settings.lrcApiExternalDataEnabled = defaults.lrcApiExternalDataEnabled
+    case "lrclib": persistent.settings.lrclibExternalDataEnabled = defaults.lrclibExternalDataEnabled
+    case "netease": persistent.settings.neteaseExternalDataEnabled = defaults.neteaseExternalDataEnabled
+    case "neteaseAccessMode": persistent.settings.neteaseAccessMode = defaults.neteaseAccessMode; persistent.settings.neteaseApiBaseUrl = defaults.neteaseApiBaseUrl; configureClients()
+    case "defaultLibrarySource": persistent.settings.defaultLibrarySource = defaults.defaultLibrarySource
+    case "defaultLocalView": persistent.settings.defaultLocalLibraryView = defaults.defaultLocalLibraryView
+    case "autoQueueImports": persistent.settings.autoQueueImportedLocalTracks = defaults.autoQueueImportedLocalTracks
+    case "confirmDelete": persistent.settings.confirmBeforeDeletingLocalTracks = defaults.confirmBeforeDeletingLocalTracks
+    case "showPowerampRemoteConnection": persistent.settings.showPowerampRemote = defaults.showPowerampRemote
+    default:
+      guard key.hasPrefix("audioTag.") else { return }
+      let tag = String(key.dropFirst(9))
+      persistent.settings.audioTagVisibility[tag] = defaults.audioTagVisibility[tag] ?? true
+    }
+    applyAppearanceSettings()
+    let settings = persistent.settings
+    playerModel.darkModeEnabled = settings.darkModeEnabled
+    playerModel.desktopLyricsEnabled = settings.desktopLyricsEnabled
+    playerModel.followSystemAppearance = settings.followSystemAppearance
+    playerModel.language = settings.language
+    playerModel.loudnessEnabled = settings.loudnessEnabled
+    playerModel.showArtworkGlow = settings.showArtworkGlow
+    playerModel.showPlayerOutputInMenu = settings.showPlayerOutputInMenu
+    playerModel.equalizer.language = settings.language
+    pagesModel.equalizer.language = settings.language
+    configureDesktopLyrics()
+    persist()
+    renderPages()
   }
 
   private func refreshVisibleLibrary() {
@@ -2031,7 +2187,9 @@ final class EchoNativeAppStore {
         }
       }
       do {
-        let fetched = try await echoClient.albumTracks(albumId: albumId).map(resolvedTrack)
+        let fetched = try await echoClient.albumTracks(albumId: albumId).map {
+          resolvedTrack($0, includeLibraryFallback: false)
+        }
         guard echoAlbumGeneration == generation, self.echoClient === echoClient else { return }
         let replacements = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
         let existingIds = Set(echoTracks.map(\.id))
@@ -2083,8 +2241,13 @@ final class EchoNativeAppStore {
     updateDesktopLyrics()
     lyricsTask = Task {
       var lyrics = ""
-      lyrics = externalLyricsByTrackKey[trackKey(track)] ?? ""
-      if lyrics.isEmpty, let raw = track.lyricsUrl, let url = URL(string: raw) { lyrics = (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
+      lyrics = track.externalLyrics ?? ""
+      if lyrics.isEmpty, let raw = track.externalLyricsUrl, let url = URL(string: raw) {
+        lyrics = await EchoNativeMetadataService.text(from: url)
+      }
+      if lyrics.isEmpty, let raw = track.lyricsUrl, let url = URL(string: raw) {
+        lyrics = await EchoNativeMetadataService.text(from: url)
+      }
       if lyrics.isEmpty, track.source == .echo { lyrics = (try? await echoClient?.lyrics(trackId: track.id)) ?? "" }
       if lyrics.isEmpty, track.source == .remote { lyrics = (try? await powerampClient?.lyrics(trackId: track.id)) ?? "" }
       if lyrics.isEmpty, track.source == .streaming { lyrics = (try? await neteaseClient?.lyrics(trackId: track.id)) ?? "" }
@@ -2094,23 +2257,32 @@ final class EchoNativeAppStore {
       updateActiveLyricIndex()
       updateDesktopLyrics()
       if lyricsGeneration == generation { lyricsTask = nil }
+      if lyrics.isEmpty, metadataTask == nil, persistent.settings.externalMetadataEnabled {
+        refreshExternalMetadata(manual: false, forceMissing: true)
+      }
     }
   }
 
-  private func refreshExternalMetadata(manual: Bool) {
+  private func refreshExternalMetadata(manual: Bool, forceMissing: Bool = false) {
     guard let track = currentTrack else { return }
     guard track.source != .streaming else { return }
     let key = trackKey(track)
     let settings = persistent.settings
-    let hasExistingMetadata = track.artworkUrl?.isEmpty == false || track.hasLyrics
-      || externalLyricsByTrackKey[key]?.isEmpty == false || !playerModel.lyricLines.isEmpty
+    let hasArtwork = track.artworkUrl?.isEmpty == false
+    let hasLyrics = track.hasLyrics || track.externalLyrics?.isEmpty == false
+      || track.externalLyricsUrl?.isEmpty == false || !playerModel.lyricLines.isEmpty
+    let hasCompleteMetadata = hasArtwork && hasLyrics && !track.artist.isEmpty
     guard manual || settings.externalMetadataEnabled else { return }
-    guard manual || !settings.externalMetadataSkipExisting || !hasExistingMetadata else { return }
+    guard settings.lrcApiExternalDataEnabled || settings.lrclibExternalDataEnabled || settings.neteaseExternalDataEnabled else { return }
+    guard manual || forceMissing || !settings.externalMetadataSkipExisting || !hasCompleteMetadata else { return }
     guard manual || !ignoredExternalMetadataTrackKeys.contains(key) else { return }
     if manual {
       ignoredExternalMetadataTrackKeys.remove(key)
-      failedArtworkUrls.removeAll()
+      metadataRetryAttempts[key] = 0
     }
+    metadataRetryTask?.cancel()
+    metadataRetryTask = nil
+    metadataTask?.cancel()
     metadataGeneration &+= 1
     let generation = metadataGeneration
     externalMetadataLoading = true
@@ -2130,19 +2302,55 @@ final class EchoNativeAppStore {
             lrcApi: settings.lrcApiExternalDataEnabled,
             lrclib: settings.lrclibExternalDataEnabled,
             netease: settings.neteaseExternalDataEnabled
-          )
+          ),
+          neteaseClient: metadataNeteaseClient
         )
         guard metadataGeneration == generation, currentTrack.map({ trackKey($0) }) == trackKey(track) else { return }
         if settings.externalDataSelectionMode == "ask" {
-          externalMetadataCandidates = candidates
-          externalMetadataTrackKey = key
-          playerModel.updateExternalSourcePicker(payloadJSON: externalMetadataPickerJSON(candidates, track: track, generation: generation))
+          if candidates.isEmpty {
+            scheduleExternalMetadataRetry(for: track)
+          } else {
+            metadataRetryAttempts[key] = 0
+            externalMetadataCandidates = candidates
+            externalMetadataTrackKey = key
+            playerModel.updateExternalSourcePicker(payloadJSON: externalMetadataPickerJSON(candidates, track: track, generation: generation))
+          }
         } else {
-          applyExternalMetadata(EchoNativeMetadataService.automaticResult(from: candidates), to: track)
+          applyExternalMetadata(
+            EchoNativeMetadataService.automaticResult(from: candidates),
+            to: track,
+            fillMissingOnly: settings.externalMetadataSkipExisting
+          )
+          if let currentTrack,
+            currentTrack.artworkUrl?.isEmpty != false || currentTrack.artist.isEmpty
+              || !currentTrack.hasLyrics && playerModel.lyricLines.isEmpty {
+            scheduleExternalMetadataRetry(for: currentTrack)
+          } else {
+            metadataRetryAttempts[key] = 0
+          }
         }
       } catch {
-        if metadataGeneration == generation, manual { showError(error) }
+        guard metadataGeneration == generation else { return }
+        if manual { showError(error) }
+        else { scheduleExternalMetadataRetry(for: track) }
       }
+    }
+  }
+
+  private func scheduleExternalMetadataRetry(for track: EchoNativeCoreTrack) {
+    let key = trackKey(track)
+    guard currentTrack.map(trackKey) == key, persistent.settings.externalMetadataEnabled else { return }
+    let attempt = metadataRetryAttempts[key, default: 0]
+    let delays: [UInt64] = [2, 8, 30]
+    guard delays.indices.contains(attempt) else { return }
+    metadataRetryAttempts[key] = attempt + 1
+    metadataRetryTask?.cancel()
+    metadataRetryTask = Task {
+      do { try await Task.sleep(nanoseconds: delays[attempt] * 1_000_000_000) }
+      catch { return }
+      guard currentTrack.map(trackKey) == key else { return }
+      metadataRetryTask = nil
+      refreshExternalMetadata(manual: false, forceMissing: true)
     }
   }
 
@@ -2158,7 +2366,7 @@ final class EchoNativeAppStore {
       let key = trackKey(track)
       guard track.source != .streaming else { return false }
       guard track.artworkUrl?.isEmpty != false, !libraryArtworkLookupKeys.contains(key) else { return false }
-      return !settings.externalMetadataSkipExisting || !track.hasLyrics
+      return true
     }
     guard !pending.isEmpty else { return }
     pending.forEach { libraryArtworkLookupKeys.insert(trackKey($0)) }
@@ -2175,15 +2383,18 @@ final class EchoNativeAppStore {
             lrclib: false,
             netease: settings.neteaseExternalDataEnabled
           ),
-          includeNeteaseLyrics: false
+          includeNeteaseLyrics: false,
+          neteaseClient: metadataNeteaseClient
         ), let artwork = EchoNativeMetadataService.automaticResult(from: candidates).artworkUrl,
           !artwork.isEmpty,
           libraryArtworkGeneration == generation
         else { continue }
         var updated = resolvedTrack(requestedTrack)
         guard updated.artworkUrl?.isEmpty != false else { continue }
+        updated.externalArtworkUrl = artwork
         updated.artworkUrl = artwork
         replaceTrack(updated)
+        if updated.source == .local { scheduleLocalMetadataEmbedding(updated) }
         if currentTrack.map(trackKey) == trackKey(updated) {
           currentTrack = updated
           updatePlayerTrack(updated)
@@ -2194,6 +2405,7 @@ final class EchoNativeAppStore {
       }
       guard libraryArtworkGeneration == generation else { return }
       libraryArtworkTask = nil
+      if changed { persist() }
       if changed || playerModel.activePage == "library" || playerModel.activePage == "search" {
         renderPages()
       }
@@ -2205,6 +2417,34 @@ final class EchoNativeAppStore {
     libraryArtworkTask?.cancel()
     libraryArtworkTask = nil
     libraryArtworkLookupKeys.removeAll()
+  }
+
+  private func scheduleLocalMetadataEmbedding(_ track: EchoNativeCoreTrack) {
+    guard track.source == .local else { return }
+    pendingLocalMetadataEmbeddings[trackKey(track)] = track
+    guard localMetadataEmbeddingTask == nil else { return }
+    localMetadataEmbeddingTask = Task {
+      defer { localMetadataEmbeddingTask = nil }
+      var changed = false
+      while !Task.isCancelled, let entry = pendingLocalMetadataEmbeddings.first {
+        pendingLocalMetadataEmbeddings.removeValue(forKey: entry.key)
+        guard let embedded = try? await EchoNativeLocalLibrary.embedExternalMetadata(for: entry.value),
+          !Task.isCancelled
+        else { continue }
+        replaceTrack(embedded)
+        changed = true
+        if currentTrack.map(trackKey) == entry.key {
+          currentTrack = embedded
+          updatePlayerTrack(embedded)
+          updateDesktopLyrics()
+        }
+      }
+      if changed {
+        updateQueueModel()
+        persist()
+        renderPages()
+      }
+    }
   }
 
   private func externalMetadataPickerJSON(
@@ -2265,24 +2505,47 @@ final class EchoNativeAppStore {
     clearExternalMetadataPicker()
   }
 
-  private func applyExternalMetadata(_ result: EchoNativeMetadataService.Result, to track: EchoNativeCoreTrack) {
+  private func applyExternalMetadata(
+    _ result: EchoNativeMetadataService.Result,
+    to track: EchoNativeCoreTrack,
+    fillMissingOnly: Bool = false
+  ) {
     guard currentTrack.map(trackKey) == trackKey(track) else { return }
     var updated = track
-    if let artwork = result.artworkUrl, !artwork.isEmpty { updated.artworkUrl = artwork }
-    if let artist = result.artist, !artist.isEmpty { updated.artist = artist }
+    if let artwork = result.artworkUrl, !artwork.isEmpty,
+      !fillMissingOnly || updated.artworkUrl?.isEmpty != false {
+      updated.externalArtworkUrl = artwork
+      updated.artworkUrl = artwork
+    }
+    if let artist = result.artist, !artist.isEmpty, !fillMissingOnly || updated.artist.isEmpty {
+      updated.externalArtist = artist
+      updated.artist = artist
+    }
+    let shouldApplyLyrics = !result.lyrics.isEmpty && (!fillMissingOnly || !updated.hasLyrics && playerModel.lyricLines.isEmpty)
+    if shouldApplyLyrics {
+      if let lyricsUrl = EchoNativeMetadataService.cacheLyrics(result.lyrics, for: updated) {
+        updated.externalLyrics = nil
+        updated.externalLyricsUrl = lyricsUrl.absoluteString
+      } else {
+        updated.externalLyrics = result.lyrics
+      }
+      updated.hasLyrics = true
+    }
     replaceTrack(updated)
+    addRecent(updated)
     currentTrack = updated
     updatePlayerTrack(updated)
-    if !result.lyrics.isEmpty {
+    if shouldApplyLyrics {
       lyricsGeneration &+= 1
       lyricsTask?.cancel()
       lyricsTask = nil
-      externalLyricsByTrackKey[trackKey(track)] = result.lyrics
       let lines = EchoNativeMetadataService.parseLyrics(result.lyrics)
       playerModel.lyricLines = lines
       updateActiveLyricIndex()
     }
+    if updated.source == .local { scheduleLocalMetadataEmbedding(updated) }
     updateQueueModel()
+    updateDesktopLyrics()
     renderPages()
     lastNowPlayingTrackKey = ""
     publishNowPlaying()
@@ -2298,6 +2561,7 @@ final class EchoNativeAppStore {
     replace(in: &powerampTracks)
     replace(in: &neteaseTracks)
     replace(in: &neteaseSearchTracks)
+    replace(in: &persistent.streamingRecommendedTracks)
     replace(in: &persistent.recentTracks)
     replace(in: &queue)
   }
@@ -2313,28 +2577,6 @@ final class EchoNativeAppStore {
     clearExternalMetadataPicker()
   }
 
-  private func handleArtworkError(_ url: String) {
-    guard !url.isEmpty else { return }
-    guard failedArtworkUrls.insert(url).inserted else { return }
-    func clear(in values: inout [EchoNativeCoreTrack]) {
-      for index in values.indices where values[index].artworkUrl == url { values[index].artworkUrl = nil }
-    }
-    clear(in: &localTracks)
-    clear(in: &echoTracks)
-    clear(in: &powerampTracks)
-    clear(in: &neteaseTracks)
-    clear(in: &queue)
-    for index in echoAlbums.indices where echoAlbums[index].artworkUrl == url { echoAlbums[index].artworkUrl = nil }
-    for index in powerampAlbums.indices where powerampAlbums[index].artworkUrl == url { powerampAlbums[index].artworkUrl = nil }
-    if currentTrack?.artworkUrl == url {
-      currentTrack?.artworkUrl = nil
-      playerModel.artworkUrl = ""
-      if persistent.settings.externalMetadataEnabled { refreshExternalMetadata(manual: false) }
-    }
-    updateQueueModel()
-    renderPages()
-  }
-
   private func updateLoadingState() {
     playerModel.playbackLoading = audioLoading
     playerModel.metadataLoading = audioLoading || externalMetadataLoading
@@ -2343,13 +2585,16 @@ final class EchoNativeAppStore {
   private func track(id: String, source: EchoNativeTrackSource?) -> EchoNativeCoreTrack? {
     let values = source.map { libraryTracks(for: $0) } ?? allTracks()
     return values.first { $0.id == id }
+      ?? persistent.streamingRecommendedTracks.first { track in
+        track.id == id && (source.map { track.source == $0 } ?? true)
+      }
       ?? queue.first { track in track.id == id && (source.map { track.source == $0 } ?? true) }
       ?? persistent.recentTracks.first { track in track.id == id && (source.map { track.source == $0 } ?? true) }
   }
 
-  private func resolvedTrack(_ track: EchoNativeCoreTrack) -> EchoNativeCoreTrack {
+  private func resolvedTrack(_ track: EchoNativeCoreTrack, includeLibraryFallback: Bool = true) -> EchoNativeCoreTrack {
     var value = track
-    if let libraryTrack = self.track(id: track.id, source: track.source) {
+    if includeLibraryFallback, let libraryTrack = self.track(id: track.id, source: track.source) {
       if value.album.isEmpty { value.album = libraryTrack.album }
       if value.albumArtist.isEmpty { value.albumArtist = libraryTrack.albumArtist }
       if value.artist.isEmpty { value.artist = libraryTrack.artist }
@@ -2370,8 +2615,22 @@ final class EchoNativeAppStore {
       if value.title.isEmpty { value.title = libraryTrack.title }
       if value.trackNo == nil { value.trackNo = libraryTrack.trackNo }
     }
+    if let cached = persistent.recentTracks.first(where: { trackKey($0) == trackKey(value) }) {
+      if value.externalArtist?.isEmpty != false { value.externalArtist = cached.externalArtist }
+      if value.externalArtworkUrl?.isEmpty != false { value.externalArtworkUrl = cached.externalArtworkUrl }
+      if value.externalLyrics?.isEmpty != false { value.externalLyrics = cached.externalLyrics }
+      if value.externalLyricsUrl?.isEmpty != false { value.externalLyricsUrl = cached.externalLyricsUrl }
+      if value.artworkUrl?.isEmpty != false { value.artworkUrl = cached.artworkUrl }
+    }
+    if let artist = value.externalArtist, !artist.isEmpty { value.artist = artist }
+    if let artwork = value.externalArtworkUrl, !artwork.isEmpty { value.artworkUrl = artwork }
+    if value.externalLyricsUrl?.isEmpty != false, let lyrics = value.externalLyrics, !lyrics.isEmpty,
+      let lyricsUrl = EchoNativeMetadataService.cacheLyrics(lyrics, for: value) {
+      value.externalLyrics = nil
+      value.externalLyricsUrl = lyricsUrl.absoluteString
+    }
+    if value.externalLyricsUrl?.isEmpty == false { value.hasLyrics = true }
     if value.artworkUrl?.isEmpty != false { value.artworkUrl = albumArtwork(for: value) }
-    if let artwork = value.artworkUrl, failedArtworkUrls.contains(artwork) { value.artworkUrl = nil }
     return value
   }
 
@@ -2563,7 +2822,7 @@ final class EchoNativeAppStore {
     setIfChanged(playerModel, \.signalOutputBitDepth, telemetry?.bitDepth.map { "\($0)Bit" } ?? "")
     setIfChanged(playerModel, \.signalOutputVolume, 0)
     setIfChanged(playerModel, \.signalTelemetrySource, telemetry == nil ? "unverified" : "reported")
-    if signalPathVisible {
+    if signalPathVisible || persistent.settings.desktopLyricsEnabled && persistent.settings.desktopLyricsVisualizer != "off" {
       setIfChanged(playerModel.signalMeter, \.clipping, telemetry?.clipping ?? false)
       setIfChanged(playerModel.signalMeter, \.lufsMomentary, telemetry?.lufsMomentary)
       setIfChanged(playerModel.signalMeter, \.peakDb, telemetry?.peakDb ?? -120)
@@ -2783,6 +3042,7 @@ final class EchoNativeAppStore {
       animation: settings.desktopLyricsAnimation,
       background: settings.desktopLyricsBackground,
       enabled: settings.desktopLyricsEnabled,
+      fontName: settings.customFontName,
       fontSize: settings.desktopLyricsFontSize,
       heightScale: settings.desktopLyricsHeightScale,
       onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
@@ -2791,6 +3051,7 @@ final class EchoNativeAppStore {
       showMetadata: settings.desktopLyricsShowMetadata,
       timedReveal: settings.desktopLyricsTimedReveal,
       transitionAnimation: settings.desktopLyricsTransitionAnimation,
+      visualizer: settings.desktopLyricsVisualizer,
       widthScale: settings.desktopLyricsWidthScale
     ), importedBackgroundImage: desktopLyricsBackgroundImage)
     updateDesktopLyrics()
@@ -2798,12 +3059,15 @@ final class EchoNativeAppStore {
 
   private func updateDesktopLyrics() {
     desktopLyricsController.update(
+      trackKey: currentTrack.map(trackKey) ?? "",
       title: playerModel.title,
       artist: playerModel.artist,
       artworkURL: playerModel.artworkUrl,
       lines: playerModel.lyricLines,
       activeIndex: playerModel.activeLyricIndex,
       isPlaying: playerModel.isPlaying,
+      peakDb: playerModel.signalMeter.peakDb,
+      rmsDb: playerModel.signalMeter.rmsDb,
       durationMs: playerModel.durationMs,
       positionMs: playerModel.positionMs
     )
@@ -2812,6 +3076,34 @@ final class EchoNativeAppStore {
   private var desktopLyricsBackgroundURL: URL? {
     FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
       .appendingPathComponent("desktop-lyrics-background.jpg")
+  }
+
+  private var appearanceBackgroundURL: URL? {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+      .appendingPathComponent("appearance-background.jpg")
+  }
+
+  private var appearanceFontURL: URL? {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+      .appendingPathComponent("appearance-font")
+  }
+
+  private func applyAppearanceSettings() {
+    let settings = persistent.settings
+    playerModel.appearanceBackground = settings.appearanceBackground
+    playerModel.appearanceImageUrl = appearanceBackgroundURL.flatMap {
+      FileManager.default.fileExists(atPath: $0.path) ? $0.absoluteString : nil
+    } ?? ""
+    playerModel.appearancePattern = settings.appearancePattern
+    playerModel.artworkMotionEnabled = settings.artworkMotionEnabled
+    playerModel.backgroundMotionEnabled = settings.backgroundMotionEnabled
+    playerModel.customFontName = settings.customFontName
+    playerModel.fontScale = settings.fontScale
+    playerModel.hapticsEnabled = settings.hapticsEnabled
+    playerModel.motionStyle = settings.motionStyle
+    playerModel.themeColorHex = settings.themeColorHex
+    UserDefaults.standard.set(settings.customFontName, forKey: "echo.appearance.fontName")
+    UserDefaults.standard.set(settings.fontScale, forKey: "echo.appearance.fontScale")
   }
 
   private func loadDesktopLyricsBackgroundImage() -> UIImage? {
@@ -2829,6 +3121,60 @@ final class EchoNativeAppStore {
       try data.write(to: url, options: .atomic)
       desktopLyricsBackgroundImage = image
       persistent.settings.desktopLyricsBackground = "custom"
+      configureDesktopLyrics()
+      persist()
+      renderPages()
+    } catch {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = error.localizedDescription
+    }
+  }
+
+  private func importAppearanceBackground(_ data: Data?) {
+    guard let data, let image = UIImage(data: data), image.size.width > 0,
+      let url = appearanceBackgroundURL else {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = localized("The selected image could not be read.", "无法读取所选图片。")
+      return
+    }
+    do {
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try data.write(to: url, options: .atomic)
+      persistent.settings.appearanceBackground = "custom"
+      applyAppearanceSettings()
+      persist()
+      renderPages()
+    } catch {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = error.localizedDescription
+    }
+  }
+
+  private func registerStoredAppearanceFont() {
+    guard let url = appearanceFontURL, let data = try? Data(contentsOf: url) else { return }
+    _ = registerAppearanceFont(data)
+  }
+
+  private func registerAppearanceFont(_ data: Data) -> String? {
+    guard let provider = CGDataProvider(data: data as CFData), let font = CGFont(provider),
+      let name = font.postScriptName as String? else { return nil }
+    var error: Unmanaged<CFError>?
+    _ = CTFontManagerRegisterGraphicsFont(font, &error)
+    return name
+  }
+
+  private func importAppearanceFont(_ data: Data?) {
+    guard let data, data.count <= 20 * 1_024 * 1_024,
+      let name = registerAppearanceFont(data), let url = appearanceFontURL else {
+      playerModel.alertTitle = localized("Import failed", "导入失败")
+      playerModel.alertMessage = localized("Choose a valid TTF or OTF font file.", "请选择有效的 TTF 或 OTF 字体文件。")
+      return
+    }
+    do {
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try data.write(to: url, options: .atomic)
+      persistent.settings.customFontName = name
+      applyAppearanceSettings()
       configureDesktopLyrics()
       persist()
       renderPages()
