@@ -21,6 +21,8 @@ module.exports = (config) => {
 
     const bundleIdentifier = `${mod.ios?.bundleIdentifier || 'app.echo.next.ios'}.widget`;
     const target = project.addTarget(targetName, 'app_extension', targetName, bundleIdentifier);
+    project.addBuildPhase([], 'PBXSourcesBuildPhase', 'Sources', target.uuid);
+    project.addBuildPhase([], 'PBXFrameworksBuildPhase', 'Frameworks', target.uuid);
     const group = project.addPbxGroup([], targetName, targetName);
     project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
     project.addSourceFile('EchoWidget.swift', { target: target.uuid }, group.uuid);

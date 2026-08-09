@@ -344,6 +344,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(payload, /"label": nowPlayingLabel/u);
   assert.match(widget, /supportedFamilies\(\[\.systemSmall, \.systemMedium\]\)/u);
   assert.match(widgetPlugin, /addTarget\(targetName, 'app_extension'/u);
+  assert.match(widgetPlugin, /'PBXSourcesBuildPhase', 'Sources', target\.uuid/u);
   assert.match(player, /EchoNativeSplashView\(/u);
   assert.match(player, /Task\.sleep\(nanoseconds: 5_000_000_000\)/u);
   assert.match(splash, /EchoSplashSakuraField\(count: 100/u);
