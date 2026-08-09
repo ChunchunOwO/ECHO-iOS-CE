@@ -148,29 +148,43 @@ private struct EchoSplashGlowCanvas: View {
   let time: TimeInterval
 
   var body: some View {
-    Canvas { context, size in
-      context.drawLayer { glow in
-        glow.addFilter(.blur(radius: 54))
-        for index in 0..<3 {
-          let phase = time * (0.09 + Double(index) * 0.025) + Double(index) * 2.1
-          let center = CGPoint(
-            x: size.width * (0.5 + sin(phase) * 0.34),
-            y: size.height * (0.42 + cos(phase * 0.78) * 0.28)
-          )
-          let radius = min(size.width, size.height) * CGFloat(0.24 + Double(index) * 0.035)
-          let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-          glow.fill(
-            Path(ellipseIn: rect),
-            with: .radialGradient(
-              Gradient(colors: [Color.white.opacity(0.2), Color.pink.opacity(0.08), .clear]),
-              center: center,
-              startRadius: 0,
-              endRadius: radius
-            )
-          )
+    GeometryReader { geometry in
+      ZStack {
+        ForEach(0..<3, id: \.self) { index in
+          EchoSplashGlowBlob(index: index, time: time, size: geometry.size)
         }
       }
     }
+  }
+}
+
+private struct EchoSplashGlowBlob: View {
+  let index: Int
+  let time: TimeInterval
+  let size: CGSize
+
+  private var phase: Double { time * (0.09 + Double(index) * 0.025) + Double(index) * 2.1 }
+  private var radius: CGFloat { min(size.width, size.height) * CGFloat(0.24 + Double(index) * 0.035) }
+  private var center: CGPoint {
+    CGPoint(
+      x: size.width * (0.5 + sin(phase) * 0.34),
+      y: size.height * (0.42 + cos(phase * 0.78) * 0.28)
+    )
+  }
+
+  var body: some View {
+    Circle()
+      .fill(
+        RadialGradient(
+          colors: [Color.white.opacity(0.2), Color.pink.opacity(0.08), .clear],
+          center: .center,
+          startRadius: 0,
+          endRadius: radius
+        )
+      )
+      .frame(width: radius * 2, height: radius * 2)
+      .position(center)
+      .blur(radius: 10)
   }
 }
 
