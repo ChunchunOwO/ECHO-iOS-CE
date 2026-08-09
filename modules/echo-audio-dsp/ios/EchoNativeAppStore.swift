@@ -940,7 +940,7 @@ final class EchoNativeAppStore {
       }
       do {
         let detailedTrack = try? await neteaseClient.trackDetail(trackId: track.id)
-        var playbackTrack = detailedTrack.map(resolvedTrack) ?? track
+        var playbackTrack = detailedTrack.map { resolvedTrack($0) } ?? track
         if playbackTrack.artworkUrl?.isEmpty != false { playbackTrack.artworkUrl = track.artworkUrl }
         guard self.neteaseClient === neteaseClient, playbackGeneration == generation,
           currentTrack.map({ trackKey($0) }) == trackKey(track) else { return }
@@ -2362,7 +2362,7 @@ final class EchoNativeAppStore {
       settings.lrcApiExternalDataEnabled || settings.neteaseExternalDataEnabled
     else { return }
 
-    let pending = tracks.map(resolvedTrack).filter { track in
+    let pending = tracks.map { resolvedTrack($0) }.filter { track in
       let key = trackKey(track)
       guard track.source != .streaming else { return false }
       guard track.artworkUrl?.isEmpty != false, !libraryArtworkLookupKeys.contains(key) else { return false }
@@ -2635,7 +2635,7 @@ final class EchoNativeAppStore {
   }
 
   private func resolvedTracks(_ tracks: [EchoNativeCoreTrack]) -> [EchoNativeCoreTrack] {
-    tracks.map(resolvedTrack)
+    tracks.map { resolvedTrack($0) }
   }
 
   func track(forKey key: String) -> EchoNativeCoreTrack? {

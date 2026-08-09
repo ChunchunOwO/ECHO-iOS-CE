@@ -483,10 +483,8 @@ private struct EchoNativeAppScreen: View {
       }
       .tint(echoColor(hex: playerModel.themeColorHex))
       .environment(\.font, echoFont(size: 17))
-      .environment(\.accessibilityReduceMotion, systemReduceMotion || playerModel.motionStyle == "off")
       if showingSplash {
-        EchoNativeSplashView()
-          .environment(\.accessibilityReduceMotion, systemReduceMotion || playerModel.motionStyle == "off")
+        EchoNativeSplashView(forceReduceMotion: playerModel.motionStyle == "off")
           .transition(.opacity)
           .zIndex(100)
       }

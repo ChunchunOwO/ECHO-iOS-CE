@@ -2,8 +2,11 @@ import SwiftUI
 
 struct EchoNativeSplashView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  let forceReduceMotion: Bool
   @State private var entered = false
   @State private var breathing = false
+
+  private var motionReduced: Bool { reduceMotion || forceReduceMotion }
 
   var body: some View {
     ZStack {
@@ -19,9 +22,9 @@ struct EchoNativeSplashView: View {
       )
       .ignoresSafeArea()
 
-      EchoSplashGlow(reduceMotion: reduceMotion)
+      EchoSplashGlow(reduceMotion: motionReduced)
         .ignoresSafeArea()
-      EchoSplashSakuraField(count: 100, reduceMotion: reduceMotion)
+      EchoSplashSakuraField(count: 100, reduceMotion: motionReduced)
         .ignoresSafeArea()
 
       VStack(spacing: 0) {
@@ -35,14 +38,14 @@ struct EchoNativeSplashView: View {
               .shadow(color: Color(red: 1, green: 0.68, blue: 0.84).opacity(breathing ? 0.8 : 0.34), radius: breathing ? 26 : 12)
               .minimumScaleFactor(0.7)
               .lineLimit(1)
-            EchoSplashTitleShine(reduceMotion: reduceMotion)
+            EchoSplashTitleShine(reduceMotion: motionReduced)
           }
           .minimumScaleFactor(0.7)
           .lineLimit(1)
-          .scaleEffect(breathing && !reduceMotion ? 1.018 : 0.99)
+          .scaleEffect(breathing && !motionReduced ? 1.018 : 0.99)
           .opacity(entered ? 1 : 0)
           .offset(y: entered ? 0 : 20)
-          .animation(reduceMotion ? nil : .easeOut(duration: 0.8), value: entered)
+          .animation(motionReduced ? nil : .easeOut(duration: 0.8), value: entered)
 
           HStack(spacing: 12) {
             EchoSplashDecorationLine()
@@ -54,7 +57,7 @@ struct EchoNativeSplashView: View {
           }
           .opacity(entered ? 1 : 0)
           .offset(y: entered ? 0 : 14)
-          .animation(reduceMotion ? nil : .easeOut(duration: 0.8).delay(0.16), value: entered)
+          .animation(motionReduced ? nil : .easeOut(duration: 0.8).delay(0.16), value: entered)
         }
         .padding(.horizontal, 28)
 
@@ -72,18 +75,18 @@ struct EchoNativeSplashView: View {
         .foregroundStyle(Color.white.opacity(breathing ? 0.9 : 0.56))
         .opacity(entered ? 1 : 0)
         .offset(y: entered ? 0 : 12)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.75).delay(0.34), value: entered)
+        .animation(motionReduced ? nil : .easeOut(duration: 0.75).delay(0.34), value: entered)
         .padding(.bottom, 42)
       }
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("ECHO 正在启动")
     .onAppear {
-      withAnimation(reduceMotion ? nil : .easeOut(duration: 0.9)) { entered = true }
+      withAnimation(motionReduced ? nil : .easeOut(duration: 0.9)) { entered = true }
       breathing = true
     }
     .animation(
-      reduceMotion ? nil : .easeInOut(duration: 1.7).repeatForever(autoreverses: true),
+      motionReduced ? nil : .easeInOut(duration: 1.7).repeatForever(autoreverses: true),
       value: breathing
     )
   }
@@ -135,32 +138,39 @@ private struct EchoSplashGlow: View {
 
   var body: some View {
     TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { timeline in
-      Canvas { context, size in
-        let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
-        context.drawLayer { glow in
-          glow.addFilter(.blur(radius: 54))
-          for index in 0..<3 {
-            let phase = time * (0.09 + Double(index) * 0.025) + Double(index) * 2.1
-            let center = CGPoint(
-              x: size.width * (0.5 + sin(phase) * 0.34),
-              y: size.height * (0.42 + cos(phase * 0.78) * 0.28)
+      EchoSplashGlowCanvas(time: reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate)
+    }
+    .blendMode(.screen)
+  }
+}
+
+private struct EchoSplashGlowCanvas: View {
+  let time: TimeInterval
+
+  var body: some View {
+    Canvas { context, size in
+      context.drawLayer { glow in
+        glow.addFilter(.blur(radius: 54))
+        for index in 0..<3 {
+          let phase = time * (0.09 + Double(index) * 0.025) + Double(index) * 2.1
+          let center = CGPoint(
+            x: size.width * (0.5 + sin(phase) * 0.34),
+            y: size.height * (0.42 + cos(phase * 0.78) * 0.28)
+          )
+          let radius = min(size.width, size.height) * CGFloat(0.24 + Double(index) * 0.035)
+          let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+          glow.fill(
+            Path(ellipseIn: rect),
+            with: .radialGradient(
+              Gradient(colors: [Color.white.opacity(0.2), Color.pink.opacity(0.08), .clear]),
+              center: center,
+              startRadius: 0,
+              endRadius: radius
             )
-            let radius = min(size.width, size.height) * CGFloat(0.24 + Double(index) * 0.035)
-            let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-            glow.fill(
-              Path(ellipseIn: rect),
-              with: .radialGradient(
-                Gradient(colors: [Color.white.opacity(0.2), Color.pink.opacity(0.08), .clear]),
-                center: center,
-                startRadius: 0,
-                endRadius: radius
-              )
-            )
-          }
+          )
         }
       }
     }
-    .blendMode(.screen)
   }
 }
 
