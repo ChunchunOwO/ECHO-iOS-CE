@@ -5,7 +5,7 @@
 <h1 align="center">ECHO iPhone Community Edition</h1>
 
 <p align="center">
-  一款面向 iPhone 的独立音乐播放器，支持连接 <a href="https://github.com/Moekotori/ECHO">ECHO NEXT</a> EchoLink
+  一款面向 iOS 的独立音乐播放器，支持连接 <a href="https://github.com/Moekotori/ECHO">ECHO NEXT</a> EchoLink等多源服务
 </p>
 
 <p align="center">
