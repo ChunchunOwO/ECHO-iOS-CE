@@ -22,11 +22,10 @@
 
 > 这个项目是我的第一个作品 做的很烂 感谢理解<3
 
-## 这是什么
+## ECHO-iOS-CE是什么？
 
-ECHO iPhone 是一个独立的 iPhone 音乐播放器。它可以播放手机本地音乐、连接 ECHO NEXT，也可以登录网易云音乐。曲库、搜索、播放列表、歌词和播放控制集中在同一个 App 内。
-
-0.5.0 将主要页面迁移到 SwiftUI，并加入原生音频 DSP。本地播放、ECHO 串流和网易云播放会优先使用 iOS 原生音频引擎，EQ、响度归一化、音量和进度调整都作用在真实音频链路上。
+ECHO iPhone 是一个独立的 iPhone 音乐播放器。极简，易用，美观是他的特点。
+TA可以播放手机本地音乐、连接 ECHO NEXT，也可以登录网易云音乐，获取安卓PowerAMP曲库等。曲库、搜索、播放列表、歌词和播放控制集中在同一个 App 内。
 
 ## 功能亮点
 
@@ -60,18 +59,7 @@ ECHO iPhone 是一个独立的 iPhone 音乐播放器。它可以播放手机本
 - 本地持久化：连接信息、设置状态、本地收藏、最近播放和队列都会保存到 App 本地数据。
 - 播放保护：拖动进度时不会被状态刷新拉回；切换输出失败时保留当前播放，不会显示错误模式。
 - 数据保护：本地扫描失败不会清空收藏、最近播放、歌单或队列；旧连接响应不会覆盖当前连接。
-
-## 当前限制
-
-- ECHO 曲库、电脑控制和电脑串流需要开启 ECHO NEXT 的 EchoLink。
-- iPhone 和电脑需要在同一个局域网。
-- Windows 防火墙需要允许 ECHO NEXT 通信。
-- 手机串流依赖桌面端 stream 接口；DSP 模式会先缓存串流音频再播放。
-- 网易云流媒体可选择直连非官方 Web 接口，或连接自己的 NeteaseCloudMusicApi 服务；直连接口可能受上游变更影响。
-- 外源数据默认关闭；LRCLIB、LrcAPI 和网易云音乐可单独开启，需要手机能连接外网。
-- 网易云音乐使用非官方公开接口，稳定性取决于上游可用性。
-- 封面、歌词和音频 tag 优先使用本地文件或桌面端 EchoLink 返回的数据。
-- 项目使用 Expo / React Native 负责状态与网络层，主要 iOS 页面和 DSP 使用原生 Swift / SwiftUI。
+- 等等等功能等你发现~✨
 
 ## 环境要求
 
@@ -218,33 +206,6 @@ scripts/                        iOS 构建辅助脚本
 docs/                           图标、预览图和 README 资产
 ```
 
-## 上传清单
-
-建议上传：
-
-- `.github/workflows/build-ios-unsigned.yml`
-- `.gitattributes`
-- `.gitignore`
-- `app.json`
-- `App.tsx`
-- `Assets.car`
-- `modules/`
-- `package.json`
-- `package-lock.json`
-- `README.md`
-- `README.en.md`
-- `RELEASE_NOTES.md`
-- `tsconfig.json`
-- `docs/`
-- `scripts/`
-- `src/`
-
-不要上传：
-
-- `node_modules/`
-- `build/`
-- 生成的 `.ipa` 文件
-
 ## Release 更新日志
 
-最新更新请看 [RELEASE_NOTES.md](RELEASE_NOTES.md)。
+最新更新请看 [RELEASE_NOTES.md](RELEASE_NOTES.md)（已过期）。
