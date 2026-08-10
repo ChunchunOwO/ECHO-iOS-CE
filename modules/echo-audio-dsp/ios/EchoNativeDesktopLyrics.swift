@@ -198,7 +198,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private var needsContinuousRendering: Bool {
     if !hasRenderedFrame || pictureInPictureController?.isPictureInPictureActive != true { return true }
-    hasTrack && (isPlaying || (configuration.transitionAnimation && CACurrentMediaTime() - lyricTransitionStartedAt < 0.35))
+    return hasTrack && (isPlaying || (configuration.transitionAnimation && CACurrentMediaTime() - lyricTransitionStartedAt < 0.35))
   }
 
   private func refreshPresentation() {
