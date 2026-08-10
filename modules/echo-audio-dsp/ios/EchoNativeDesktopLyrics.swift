@@ -11,7 +11,7 @@ import UIKit
 final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictureInPictureControllerDelegate, @preconcurrency AVPictureInPictureSampleBufferPlaybackDelegate {
   struct Configuration: Equatable {
     var animation = "flow"
-    var background = "theme"
+    var background = "artwork"
     var enabled = false
     var fontName = ""
     var fontSize = 32.0
@@ -21,9 +21,9 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     var position = "bottom"
     var rainbowGradient = false
     var showMetadata = true
-    var themeColorHex = "AC1F24"
-    var timedReveal = false
-    var transitionAnimation = false
+    var themeColorHex = "69508F"
+    var timedReveal = true
+    var transitionAnimation = true
     var visualizer = "off"
     var widthScale = 1.0
   }
@@ -407,7 +407,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.scaleBy(x: 1, y: -1)
     let textPanel = CGRect(x: text.minX, y: CGFloat(height) - text.maxY, width: text.width, height: text.height)
     let currentText = currentLyric.isEmpty
-      ? (configuration.language == "en" ? "No lyric data" : "暂无歌曲数据")
+      ? (configuration.language == "en" ? "No lyric data" : "??????")
       : currentLyric
     let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  /  ")
     let metadataFont = displayFont(size: min(24, max(14, coverSize * 0.11)), weight: .semibold)
@@ -489,21 +489,6 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.restoreGState()
   }
 
-  private func drawEmptyState(in context: CGContext, bounds: CGRect) {
-    context.saveGState()
-    context.translateBy(x: 0, y: bounds.height)
-    context.scaleBy(x: 1, y: -1)
-    let font = displayFont(size: min(30, max(20, bounds.height * 0.12)), weight: .bold)
-    drawCenteredText(
-      configuration.language == "en" ? "No song is playing" : "没有歌曲正在播放",
-      in: bounds.insetBy(dx: max(24, bounds.width * 0.08), dy: 0),
-      font: font,
-      color: .white.withAlphaComponent(0.9),
-      context: context
-    )
-    context.restoreGState()
-  }
-
   private func drawCover(in rect: CGRect, context: CGContext) {
     let radius = min(24, rect.width * 0.12)
     context.saveGState()
@@ -552,6 +537,21 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.setLineWidth(1)
     context.addPath(CGPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), cornerWidth: radius, cornerHeight: radius, transform: nil))
     context.strokePath()
+  }
+
+  private func drawEmptyState(in context: CGContext, bounds: CGRect) {
+    context.saveGState()
+    context.translateBy(x: 0, y: bounds.height)
+    context.scaleBy(x: 1, y: -1)
+    let font = displayFont(size: min(30, max(20, bounds.height * 0.12)), weight: .bold)
+    drawCenteredText(
+      configuration.language == "en" ? "No song is playing" : "????????",
+      in: bounds.insetBy(dx: max(24, bounds.width * 0.08), dy: 0),
+      font: font,
+      color: .white.withAlphaComponent(0.9),
+      context: context
+    )
+    context.restoreGState()
   }
 
   private func loadArtworkIfNeeded() {
@@ -615,6 +615,8 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private func drawThemeBackground(in context: CGContext, bounds: CGRect) {
     let base = themeUIColor
+    context.setFillColor(base.cgColor)
+    context.fill(bounds)
     var hue: CGFloat = 0
     var saturation: CGFloat = 0
     var brightness: CGFloat = 0
@@ -634,7 +636,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private var themeUIColor: UIColor {
-    let value = UInt64(configuration.themeColorHex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) ?? 0xAC1F24
+    let value = UInt64(configuration.themeColorHex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) ?? 0x69508F
     return UIColor(
       red: CGFloat((value >> 16) & 0xFF) / 255,
       green: CGFloat((value >> 8) & 0xFF) / 255,
@@ -932,6 +934,10 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     startRequested = false
     programmaticStopPending = false
     userDismissed = false
+    if !hasTrack {
+      hasRenderedFrame = false
+      renderFrame()
+    }
     if !shouldPresent { stopPresentation() }
   }
 

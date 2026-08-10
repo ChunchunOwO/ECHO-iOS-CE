@@ -229,7 +229,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var darkModeEnabled = false
   var customFontName = ""
   var desktopLyricsAnimation = "flow"
-  var desktopLyricsBackground = "theme"
+  var desktopLyricsBackground = "artwork"
   var desktopLyricsEnabled = false
   var desktopLyricsFontSize = 32.0
   var desktopLyricsHeightScale = 0.36
@@ -238,8 +238,8 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var desktopLyricsRainbowGradient = false
   var desktopLyricsShowMetadata = true
   var desktopLyricsSize = "medium"
-  var desktopLyricsTimedReveal = false
-  var desktopLyricsTransitionAnimation = false
+  var desktopLyricsTimedReveal = true
+  var desktopLyricsTransitionAnimation = true
   var desktopLyricsVisualizer = "off"
   var desktopLyricsWidthScale = 1.0
   var defaultLibrarySource = "local"
@@ -265,8 +265,8 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var confirmBeforeDeletingLocalTracks = true
   var showArtworkGlow = true
   var showPlayerOutputInMenu = true
-  var showPowerampRemote = false
-  var themeColorHex = "AC1F24"
+  var showPowerampRemote = true
+  var themeColorHex = "69508F"
 
   private enum LegacyCodingKeys: String, CodingKey {
     case repeatOne
@@ -295,7 +295,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     darkModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .darkModeEnabled) ?? false
     customFontName = try values.decodeIfPresent(String.self, forKey: .customFontName) ?? ""
     desktopLyricsAnimation = try values.decodeIfPresent(String.self, forKey: .desktopLyricsAnimation) ?? "flow"
-    desktopLyricsBackground = try values.decodeIfPresent(String.self, forKey: .desktopLyricsBackground) ?? "theme"
+    desktopLyricsBackground = try values.decodeIfPresent(String.self, forKey: .desktopLyricsBackground) ?? "artwork"
     desktopLyricsEnabled = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsEnabled) ?? false
     let decodedHeightScale = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsHeightScale)
     desktopLyricsHeightScale = max(0.33, min(1.0, decodedHeightScale ?? 0.36))
@@ -308,8 +308,8 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     let decodedFontSize = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsFontSize)
       ?? (legacySize == "small" ? 20 : legacySize == "large" ? 40 : 32)
     desktopLyricsFontSize = max(18, min(48, decodedFontSize))
-    desktopLyricsTimedReveal = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTimedReveal) ?? false
-    desktopLyricsTransitionAnimation = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTransitionAnimation) ?? false
+    desktopLyricsTimedReveal = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTimedReveal) ?? true
+    desktopLyricsTransitionAnimation = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTransitionAnimation) ?? true
     let decodedVisualizer = try values.decodeIfPresent(String.self, forKey: .desktopLyricsVisualizer) ?? "off"
     desktopLyricsVisualizer = ["off", "bars", "wave", "pulse"].contains(decodedVisualizer) ? decodedVisualizer : "off"
     let decodedWidthScale = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsWidthScale)
@@ -341,10 +341,10 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     confirmBeforeDeletingLocalTracks = try values.decodeIfPresent(Bool.self, forKey: .confirmBeforeDeletingLocalTracks) ?? true
     showArtworkGlow = try values.decodeIfPresent(Bool.self, forKey: .showArtworkGlow) ?? true
     showPlayerOutputInMenu = try values.decodeIfPresent(Bool.self, forKey: .showPlayerOutputInMenu) ?? true
-    showPowerampRemote = try values.decodeIfPresent(Bool.self, forKey: .showPowerampRemote) ?? false
-    let decodedThemeColor = try values.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "AC1F24"
+    showPowerampRemote = try values.decodeIfPresent(Bool.self, forKey: .showPowerampRemote) ?? true
+    let decodedThemeColor = try values.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "69508F"
     themeColorHex = decodedThemeColor.range(of: #"^[0-9A-Fa-f]{6}$"#, options: .regularExpression) == nil
-      ? "AC1F24"
+      ? "69508F"
       : decodedThemeColor.uppercased()
   }
 }

@@ -63,7 +63,7 @@ var echoWarmBackground: LinearGradient {
 }
 
 func echoColor(hex: String) -> Color {
-  let value = UInt64(hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted), radix: 16) ?? 0xAC1F24
+  let value = UInt64(hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted), radix: 16) ?? 0x69508F
   return Color(
     red: Double((value >> 16) & 0xff) / 255,
     green: Double((value >> 8) & 0xff) / 255,
@@ -323,7 +323,7 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var appearanceImageUrl = ""
   @Published var artworkBackgroundEnabled = true
   @Published var artworkUrl = ""
-  @Published var connectionLabel = "ECHO未连接"
+  @Published var connectionLabel = "ECHO???"
   @Published var connectionOnline = false
   @Published var controlsEnabled = false
   @Published var customFontName = ""
@@ -374,7 +374,7 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var signalTelemetrySource = "unverified"
   @Published var tags: [String] = []
   @Published var title = ""
-  @Published var themeColorHex = "AC1F24"
+  @Published var themeColorHex = "69508F"
   @Published var volume = 1.0
   private var lastExternalSourcePickerJSON = ""
   private var lastQueuePayloadJSON = ""
@@ -518,7 +518,7 @@ private struct EchoNativeAppScreen: View {
       get: { !playerModel.alertMessage.isEmpty },
       set: { if !$0 { playerModel.alertMessage = "" } }
     )) {
-      Button(playerModel.language == "en" ? "OK" : "好", role: .cancel) {
+      Button(playerModel.language == "en" ? "OK" : "?", role: .cancel) {
         playerModel.alertMessage = ""
       }
     } message: {
@@ -534,7 +534,6 @@ private struct EchoNativeAppScreen: View {
   @ViewBuilder
   private var appBackground: some View {
     ZStack {
-      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       if (playerModel.activePage == "control" || playerModel.appearanceBackground == "artwork")
         && !playerModel.artworkUrl.isEmpty {
         EchoNativeArtworkBackdrop(
@@ -561,6 +560,8 @@ private struct EchoNativeAppScreen: View {
         )
         .ignoresSafeArea()
         .allowsHitTesting(false)
+      } else {
+        echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       }
       EchoNativeSakuraBackdrop(color: echoColor(hex: playerModel.themeColorHex))
         .ignoresSafeArea()
@@ -659,11 +660,11 @@ private struct EchoNativeAppScreen: View {
   private func title(_ page: String) -> String {
     let english = playerModel.language == "en"
     switch page {
-    case "control": return english ? "Playback" : "播放"
-    case "library": return english ? "Library" : "曲库"
-    case "search": return english ? "Search" : "搜索"
-    case "connect": return english ? "Connect" : "连接"
-    default: return english ? "Settings" : "设置"
+    case "control": return english ? "Playback" : "??"
+    case "library": return english ? "Library" : "??"
+    case "search": return english ? "Search" : "??"
+    case "connect": return english ? "Connect" : "??"
+    default: return english ? "Settings" : "??"
     }
   }
 }
@@ -881,7 +882,7 @@ struct EchoNativePlayerScreen: View {
           HStack(alignment: .top, spacing: 5) {
             Image(systemName: "waveform")
               .accessibilityHidden(true)
-            Text(model.tags.joined(separator: "  ·  "))
+            Text(model.tags.joined(separator: "  ?  "))
               .lineLimit(compact ? 2 : 3)
               .minimumScaleFactor(0.72)
               .fixedSize(horizontal: false, vertical: true)
@@ -902,7 +903,7 @@ struct EchoNativePlayerScreen: View {
           .echoGlass(tint: Color.white.opacity(0.12), in: Circle())
       }
       .buttonStyle(.plain)
-      .accessibilityLabel(model.language == "en" ? "Close lyrics" : "关闭歌词")
+      .accessibilityLabel(model.language == "en" ? "Close lyrics" : "????")
     }
   }
 
@@ -1066,7 +1067,7 @@ struct EchoNativePlayerScreen: View {
         HStack(spacing: 5) {
           Image(systemName: "waveform")
             .accessibilityHidden(true)
-          Text(model.tags.joined(separator: "  •  "))
+          Text(model.tags.joined(separator: "  ?  "))
             .lineLimit(1)
             .minimumScaleFactor(0.65)
         }
@@ -1094,7 +1095,7 @@ struct EchoNativePlayerScreen: View {
       HStack(spacing: compact ? 24 : 34) {
         roundButton(
           symbol: "backward.end.fill",
-          label: model.language == "en" ? "Previous" : "上一首",
+          label: model.language == "en" ? "Previous" : "???",
           size: compact ? 48 : 54
         ) {
           onAction(["action": "previous"])
@@ -1119,11 +1120,11 @@ struct EchoNativePlayerScreen: View {
         .disabled(!model.controlsEnabled || model.playbackLoading)
         .opacity(model.controlsEnabled && !model.playbackLoading ? 1 : 0.5)
         .accessibilityLabel(model.playbackLoading
-          ? (model.language == "en" ? "Loading audio" : "正在加载音频")
-          : (model.language == "en" ? (model.isPlaying ? "Pause" : "Play") : (model.isPlaying ? "暂停" : "播放")))
+          ? (model.language == "en" ? "Loading audio" : "??????")
+          : (model.language == "en" ? (model.isPlaying ? "Pause" : "Play") : (model.isPlaying ? "??" : "??")))
         roundButton(
           symbol: "forward.end.fill",
-          label: model.language == "en" ? "Next" : "下一首",
+          label: model.language == "en" ? "Next" : "???",
           size: compact ? 48 : 54
         ) {
           onAction(["action": "next"])
@@ -1137,7 +1138,7 @@ struct EchoNativePlayerScreen: View {
       HStack(spacing: 0) {
         iconButton(
           symbol: playbackModeSymbol,
-          label: model.language == "en" ? "Playback mode" : "播放模式",
+          label: model.language == "en" ? "Playback mode" : "????",
           active: model.playbackMode != .normal,
           value: playbackModeLabel
         ) {
@@ -1146,13 +1147,13 @@ struct EchoNativePlayerScreen: View {
         .frame(maxWidth: .infinity)
         iconButton(
           symbol: lyricsMode ? "quote.bubble.fill" : "quote.bubble",
-          label: model.language == "en" ? (lyricsMode ? "Close lyrics" : "Lyrics") : (lyricsMode ? "关闭歌词" : "歌词"),
+          label: model.language == "en" ? (lyricsMode ? "Close lyrics" : "Lyrics") : (lyricsMode ? "????" : "??"),
           active: lyricsMode
         ) {
           onAction(["action": lyricsMode ? "lyricsClose" : "lyrics"])
         }
         .frame(maxWidth: .infinity)
-        iconButton(symbol: "list.bullet", label: model.language == "en" ? "Queue" : "播放列表", active: false) {
+        iconButton(symbol: "list.bullet", label: model.language == "en" ? "Queue" : "????", active: false) {
           showQueue = true
         }
         .frame(maxWidth: .infinity)
@@ -1175,10 +1176,10 @@ struct EchoNativePlayerScreen: View {
   private var playbackModeLabel: String {
     let english = model.language == "en"
     switch model.playbackMode {
-    case .normal: return english ? "Play once" : "正常播放"
-    case .repeatAll: return english ? "Repeat all" : "列表循环"
-    case .repeatOne: return english ? "Repeat one" : "单曲循环"
-    case .shuffle: return english ? "Shuffle" : "随机播放"
+    case .normal: return english ? "Play once" : "????"
+    case .repeatAll: return english ? "Repeat all" : "????"
+    case .repeatOne: return english ? "Repeat one" : "????"
+    case .shuffle: return english ? "Shuffle" : "????"
     }
   }
 
@@ -1197,7 +1198,7 @@ struct EchoNativePlayerScreen: View {
       )
       .tint(echoAccent)
       .disabled(!model.controlsEnabled)
-      .accessibilityLabel(model.language == "en" ? "Volume" : "音量")
+      .accessibilityLabel(model.language == "en" ? "Volume" : "??")
       .accessibilityValue("\(Int((volumeValue * 100).rounded()))%")
       Text("\(Int((volumeValue * 100).rounded()))%")
         .font(echoFont(size: 10, weight: .bold, design: .monospaced))
@@ -1217,7 +1218,7 @@ struct EchoNativePlayerScreen: View {
         onAction(["action": "trackFavoriteCurrent"])
       } label: {
         Label(
-          model.language == "en" ? (model.isFavorite ? "Remove favorite" : "Favorite") : (model.isFavorite ? "取消收藏" : "收藏"),
+          model.language == "en" ? (model.isFavorite ? "Remove favorite" : "Favorite") : (model.isFavorite ? "????" : "??"),
           systemImage: model.isFavorite ? "heart.fill" : "heart"
         )
       }
@@ -1231,7 +1232,7 @@ struct EchoNativePlayerScreen: View {
         }
       )) {
         Label(
-          model.language == "en" ? "Desktop lyrics" : "桌面歌词",
+          model.language == "en" ? "Desktop lyrics" : "????",
           systemImage: model.desktopLyricsEnabled ? "captions.bubble.fill" : "captions.bubble"
         )
       }
@@ -1240,7 +1241,7 @@ struct EchoNativePlayerScreen: View {
         onAction(["action": "externalMetadataRefresh"])
       } label: {
         Label(
-          model.language == "en" ? "Refresh external metadata" : "重新获取外源数据",
+          model.language == "en" ? "Refresh external metadata" : "????????",
           systemImage: "arrow.clockwise"
         )
       }
@@ -1248,12 +1249,12 @@ struct EchoNativePlayerScreen: View {
       Button {
         showSignalPath = true
       } label: {
-        Label(model.language == "en" ? "Signal path" : "信号路径", systemImage: "waveform.path.ecg")
+        Label(model.language == "en" ? "Signal path" : "????", systemImage: "waveform.path.ecg")
       }
       Button {
         showEqualizer = true
       } label: {
-        Label(model.language == "en" ? "Equalizer" : "均衡器", systemImage: "slider.horizontal.3")
+        Label(model.language == "en" ? "Equalizer" : "???", systemImage: "slider.horizontal.3")
       }
 
       if model.showPlayerOutputInMenu {
@@ -1262,24 +1263,24 @@ struct EchoNativePlayerScreen: View {
           get: { outputSource },
           set: { onAction(["action": "outputSource", "mode": $0]) }
         )) {
-          Text(model.language == "en" ? "Local" : "本地").tag("local")
-          Text(model.language == "en" ? "Media" : "流媒体").tag("streaming")
+          Text(model.language == "en" ? "Local" : "??").tag("local")
+          Text(model.language == "en" ? "Media" : "???").tag("streaming")
           Text("ECHO").tag("echo")
-          Text(model.language == "en" ? "Remote" : "远程").tag("remote")
+          Text(model.language == "en" ? "Remote" : "??").tag("remote")
         } label: {
-          Label(model.language == "en" ? "Music source" : "音乐源", systemImage: "music.note.list")
+          Label(model.language == "en" ? "Music source" : "???", systemImage: "music.note.list")
         }
         if outputSource == "echo" || outputSource == "remote" {
           Picker(selection: Binding(
             get: { model.outputMode },
             set: { onAction(["action": "output", "mode": $0]) }
           )) {
-            Text(model.language == "en" ? "Control" : "控制")
+            Text(model.language == "en" ? "Control" : "??")
               .tag(outputSource == "echo" ? "pc" : "remoteControl")
-            Text(model.language == "en" ? "Stream" : "串流")
+            Text(model.language == "en" ? "Stream" : "??")
               .tag(outputSource == "echo" ? "phone" : "remoteStream")
           } label: {
-            Label(model.language == "en" ? "Output mode" : "输出模式", systemImage: "waveform")
+            Label(model.language == "en" ? "Output mode" : "????", systemImage: "waveform")
           }
         }
       }
@@ -1290,7 +1291,7 @@ struct EchoNativePlayerScreen: View {
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.12), in: Circle())
     }
-    .accessibilityLabel(model.language == "en" ? "More playback controls" : "更多播放控制")
+    .accessibilityLabel(model.language == "en" ? "More playback controls" : "??????")
   }
 
   private var outputControl: some View {
@@ -1311,7 +1312,7 @@ struct EchoNativePlayerScreen: View {
     }
     .controlSize(.small)
     .tint(echoAccent)
-    .accessibilityLabel(model.language == "en" ? "Playback output" : "播放输出")
+    .accessibilityLabel(model.language == "en" ? "Playback output" : "????")
     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: outputSource)
   }
 
@@ -1320,10 +1321,10 @@ struct EchoNativePlayerScreen: View {
       get: { outputSource },
       set: { onAction(["action": "outputSource", "mode": $0]) }
     )) {
-      Text(model.language == "en" ? "Local" : "本地").tag("local")
-      Text(model.language == "en" ? "Media" : "流媒").tag("streaming")
+      Text(model.language == "en" ? "Local" : "??").tag("local")
+      Text(model.language == "en" ? "Media" : "??").tag("streaming")
       Text("ECHO").tag("echo")
-      Text(model.language == "en" ? "Remote" : "远程").tag("remote")
+      Text(model.language == "en" ? "Remote" : "??").tag("remote")
     }
     .pickerStyle(.segmented)
     .frame(maxWidth: .infinity)
@@ -1334,9 +1335,9 @@ struct EchoNativePlayerScreen: View {
       get: { model.outputMode },
       set: { onAction(["action": "output", "mode": $0]) }
     )) {
-      Text(model.language == "en" ? "Control" : "控制")
+      Text(model.language == "en" ? "Control" : "??")
         .tag(outputSource == "echo" ? "pc" : "remoteControl")
-      Text(model.language == "en" ? "Stream" : "串流")
+      Text(model.language == "en" ? "Stream" : "??")
         .tag(outputSource == "echo" ? "phone" : "remoteStream")
     }
     .pickerStyle(.segmented)
@@ -1399,8 +1400,8 @@ struct EchoNativePlayerScreen: View {
     .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.7), value: symbol)
     .accessibilityLabel(label)
     .accessibilityValue(value ?? (active
-      ? (model.language == "en" ? "On" : "已开启")
-      : (model.language == "en" ? "Off" : "已关闭")))
+      ? (model.language == "en" ? "On" : "???")
+      : (model.language == "en" ? "Off" : "???")))
   }
 
   private func formatTime(_ milliseconds: Double) -> String {
@@ -1410,17 +1411,17 @@ struct EchoNativePlayerScreen: View {
 
   private var artistLabel: String {
     let artist = model.artist.trimmingCharacters(in: .whitespacesAndNewlines)
-    return artist.isEmpty ? (model.language == "en" ? "Unknown Artist" : "未知艺术家") : artist
+    return artist.isEmpty ? (model.language == "en" ? "Unknown Artist" : "?????") : artist
   }
 
   private var albumLabel: String {
     let album = model.album.trimmingCharacters(in: .whitespacesAndNewlines)
-    return album.isEmpty ? (model.language == "en" ? "Unknown Album" : "未知专辑") : album
+    return album.isEmpty ? (model.language == "en" ? "Unknown Album" : "????") : album
   }
 
   private var titleLabel: String {
     let title = model.title.trimmingCharacters(in: .whitespacesAndNewlines)
-    return title.isEmpty ? (model.language == "en" ? "No song is playing" : "没有正在播放的歌曲") : title
+    return title.isEmpty ? (model.language == "en" ? "No song is playing" : "?????????") : title
   }
 }
 
@@ -1445,7 +1446,7 @@ private struct EchoNativeProgressControl: View {
       )
       .tint(echoAccent)
       .disabled(!controlsEnabled || durationMs <= 0)
-      .accessibilityLabel(language == "en" ? "Playback position" : "播放进度")
+      .accessibilityLabel(language == "en" ? "Playback position" : "????")
       .accessibilityValue("\(formatTime(seekValue)) / \(formatTime(durationMs))")
       HStack {
         Text(formatTime(seekValue))
@@ -1487,7 +1488,7 @@ private struct EchoNativeArtworkLoadingBadge: View {
         in: Circle()
       )
       .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
-      .accessibilityLabel(language == "en" ? "Loading artwork and lyrics" : "正在加载封面和歌词")
+      .accessibilityLabel(language == "en" ? "Loading artwork and lyrics" : "?????????")
   }
 }
 
@@ -1636,7 +1637,7 @@ private struct EchoNativeExternalSourcePicker: View {
                   .lineLimit(1)
                 Text([candidate.artist ?? "", candidate.sourceLabel]
                   .filter { !$0.isEmpty }
-                  .joined(separator: " · "))
+                  .joined(separator: " ? "))
                   .font(echoFont(size: 12, weight: .semibold))
                   .foregroundColor(echoInk.opacity(0.5))
                   .lineLimit(1)
@@ -1791,7 +1792,7 @@ private struct EchoNativeQueueSheet: View {
     VStack(spacing: 14) {
       HStack {
         VStack(alignment: .leading, spacing: 3) {
-          Text(model.queuePayload?.title ?? (model.language == "en" ? "Queue" : "播放列表"))
+          Text(model.queuePayload?.title ?? (model.language == "en" ? "Queue" : "????"))
             .font(echoFont(size: 24, weight: .bold, design: .rounded))
           if let subtitle = model.queuePayload?.subtitle, !subtitle.isEmpty {
             Text(subtitle)
@@ -1802,7 +1803,7 @@ private struct EchoNativeQueueSheet: View {
         }
         Spacer()
         if model.queuePayload?.canEdit == true, !(model.queuePayload?.items.isEmpty ?? true) {
-          Button(model.queuePayload?.clearLabel ?? (model.language == "en" ? "Clear" : "清空")) {
+          Button(model.queuePayload?.clearLabel ?? (model.language == "en" ? "Clear" : "??")) {
             if model.queuePayload?.playlistId.isEmpty == false {
               showClearConfirmation = true
             } else {
@@ -1859,7 +1860,7 @@ private struct EchoNativeQueueSheet: View {
                         .font(echoFont(size: 14, weight: .bold))
                         .foregroundColor(item.current ? echoAccent : echoInk)
                         .lineLimit(1)
-                      Text(item.meta.isEmpty ? item.artist : "\(item.artist) · \(item.meta)")
+                      Text(item.meta.isEmpty ? item.artist : "\(item.artist) ? \(item.meta)")
                         .font(echoFont(size: 11, weight: .medium))
                         .foregroundColor(echoInk.opacity(0.48))
                         .lineLimit(1)
@@ -1924,7 +1925,7 @@ private struct EchoNativeQueueSheet: View {
         VStack(spacing: 12) {
           Image(systemName: "music.note.list")
             .font(echoFont(size: 28, weight: .medium))
-          Text(model.queuePayload?.emptyLabel ?? (model.language == "en" ? "The queue is empty." : "当前播放列表暂无内容。"))
+          Text(model.queuePayload?.emptyLabel ?? (model.language == "en" ? "The queue is empty." : "???????????"))
             .font(echoFont(size: 13, weight: .semibold))
         }
         .foregroundColor(echoInk.opacity(0.42))
@@ -1935,16 +1936,16 @@ private struct EchoNativeQueueSheet: View {
     .foregroundColor(echoInk)
     .background(Color.clear)
     .confirmationDialog(
-      model.language == "en" ? "Clear this playlist?" : "清空这个歌单？",
+      model.language == "en" ? "Clear this playlist?" : "???????",
       isPresented: $showClearConfirmation,
       titleVisibility: .visible
     ) {
-      Button(model.queuePayload?.clearLabel ?? (model.language == "en" ? "Clear" : "清空"), role: .destructive) {
+      Button(model.queuePayload?.clearLabel ?? (model.language == "en" ? "Clear" : "??"), role: .destructive) {
         clearQueue()
       }
-      Button(model.language == "en" ? "Cancel" : "取消", role: .cancel) {}
+      Button(model.language == "en" ? "Cancel" : "??", role: .cancel) {}
     } message: {
-      Text(model.language == "en" ? "This removes every track from the saved playlist." : "这会从已保存歌单中移除全部歌曲。")
+      Text(model.language == "en" ? "This removes every track from the saved playlist." : "????????????????")
     }
   }
 
@@ -2159,25 +2160,25 @@ private struct EchoNativeSignalLiveMeter: View {
   }
 
   private var peakLabel: String {
-    hasLevel ? String(format: "%.1f dBFS", model.peakDb) : (external ? (english ? "External" : "外部") : "-- dBFS")
+    hasLevel ? String(format: "%.1f dBFS", model.peakDb) : (external ? (english ? "External" : "??") : "-- dBFS")
   }
 
   private var detail: String {
     guard hasLevel else {
       return external
-        ? (english ? "The remote endpoint has not reported live levels." : "远程端尚未上报实时电平。")
-        : (english ? "RMS -- dBFS · meter active during playback" : "RMS -- dBFS · 播放时启用电平表")
+        ? (english ? "The remote endpoint has not reported live levels." : "????????????")
+        : (english ? "RMS -- dBFS ? meter active during playback" : "RMS -- dBFS ? ????????")
     }
     var parts = [String(format: "RMS %.1f dBFS", model.rmsDb)]
     if let lufs = model.lufsMomentary { parts.append(String(format: "LUFS-M %.1f", lufs)) }
-    return parts.joined(separator: " · ")
+    return parts.joined(separator: " ? ")
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .firstTextBaseline) {
         VStack(alignment: .leading, spacing: 3) {
-          Text(english ? "LIVE OUTPUT PEAK" : "实时输出峰值")
+          Text(english ? "LIVE OUTPUT PEAK" : "??????")
             .font(echoFont(size: 10, weight: .bold))
             .foregroundColor(echoInk.opacity(0.48))
           Text(detail)
@@ -2193,7 +2194,7 @@ private struct EchoNativeSignalLiveMeter: View {
         .tint(model.clipping || model.peakDb > -3 ? echoAccent : echoGold)
       if hasLevel && (model.clipping || model.peakDb > -3) {
         Label(
-          english ? "Low headroom: reduce positive gain if clipping is audible." : "输出余量偏低；如出现削波，请降低正向增益。",
+          english ? "Low headroom: reduce positive gain if clipping is audible." : "?????????????????????",
           systemImage: "exclamationmark.triangle.fill"
         )
         .font(echoFont(size: 10, weight: .semibold))
@@ -2249,32 +2250,32 @@ private struct EchoNativeSignalPathSheet: View {
     let parts = [model.signalCodec, model.signalSampleRate, model.signalBitDepth, model.signalBitrate, model.signalChannelCount]
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .filter { !$0.isEmpty }
-    return parts.isEmpty ? (english ? "Format unknown" : "格式未知") : parts.joined(separator: " · ")
+    return parts.isEmpty ? (english ? "Format unknown" : "????") : parts.joined(separator: " ? ")
   }
 
   private var processingModules: [String] {
     guard usesLocalProcessing else { return [] }
     var modules: [String] = []
-    if model.eqEnabled { modules.append(english ? "10-band EQ" : "十段 EQ") }
-    if model.loudnessEnabled { modules.append(english ? "Loudness" : "响度归一化") }
+    if model.eqEnabled { modules.append(english ? "10-band EQ" : "?? EQ") }
+    if model.loudnessEnabled { modules.append(english ? "Loudness" : "?????") }
     return modules
   }
 
   private var summaryLabel: String {
-    if !hasTrack { return english ? "Waiting for playback" : "等待播放" }
-    if !pathOnline { return english ? "Path unavailable" : "链路不可用" }
+    if !hasTrack { return english ? "Waiting for playback" : "????" }
+    if !pathOnline { return english ? "Path unavailable" : "?????" }
     if !processingModules.isEmpty {
-      return english ? "Enhanced" : "已增强"
+      return english ? "Enhanced" : "???"
     }
     if usesLocalProcessing {
-      return english ? "Native playback" : "原生播放"
+      return english ? "Native playback" : "????"
     }
-    return english ? "Remote path" : "远程链路"
+    return english ? "Remote path" : "????"
   }
 
   private var summaryDetail: String {
     if !hasTrack {
-      return english ? "Start a track to inspect source, processing, and output." : "开始播放后，可查看音源、处理和输出。"
+      return english ? "Start a track to inspect source, processing, and output." : "??????????????????"
     }
     if !pathOnline {
       return model.connectionLabel
@@ -2282,69 +2283,69 @@ private struct EchoNativeSignalPathSheet: View {
     if !processingModules.isEmpty {
       return english
         ? "Active processing: \(processingModules.joined(separator: " + "))."
-        : "当前处理：\(processingModules.joined(separator: " + "))。"
+        : "?????\(processingModules.joined(separator: " + "))?"
     }
     return usesLocalProcessing
-      ? (english ? "Direct native playback with no additional DSP." : "原生直通播放，未启用额外 DSP。")
-      : (english ? "Decode and processing stay on the remote device." : "解码与处理由远程设备负责。")
+      ? (english ? "Direct native playback with no additional DSP." : "???????????? DSP?")
+      : (english ? "Decode and processing stay on the remote device." : "?????????????")
   }
 
   private var sourceDetail: String {
-    if !hasTrack { return english ? "No current track" : "当前没有歌曲" }
+    if !hasTrack { return english ? "No current track" : "??????" }
     let artist = model.artist.trimmingCharacters(in: .whitespacesAndNewlines)
     let source = model.signalSourceLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-    let base = artist.isEmpty ? model.title : "\(model.title) · \(artist)"
+    let base = artist.isEmpty ? model.title : "\(model.title) ? \(artist)"
     return source.isEmpty ? base : "\(base)\n\(source)"
   }
 
   private var processingDetail: String {
-    if !hasTrack { return english ? "—" : "—" }
+    if !hasTrack { return english ? "?" : "?" }
     if !usesLocalProcessing {
-      return english ? "Remote device owns DSP" : "DSP 由远程设备负责"
+      return english ? "Remote device owns DSP" : "DSP ???????"
     }
     return processingModules.isEmpty
-      ? (english ? "Direct / bypass" : "直通 / 旁路")
+      ? (english ? "Direct / bypass" : "?? / ??")
       : processingModules.joined(separator: " + ")
   }
 
   private var decodeValue: String {
-    if !hasTrack { return english ? "Waiting" : "等待中" }
-    if !usesLocalProcessing { return english ? "Remote decoder" : "远程解码器" }
-    if model.signalFileLoaded { return "AVAudioFile → PCM" }
-    return english ? "Preparing decoder" : "正在准备解码器"
+    if !hasTrack { return english ? "Waiting" : "???" }
+    if !usesLocalProcessing { return english ? "Remote decoder" : "?????" }
+    if model.signalFileLoaded { return "AVAudioFile ? PCM" }
+    return english ? "Preparing decoder" : "???????"
   }
 
   private var decodeDetail: String {
     if !usesLocalProcessing {
       return english
-        ? "Decoder details are owned by the remote endpoint. · Resampling: ?"
-        : "解码器详情由远程端提供。 · 重采样：?"
+        ? "Decoder details are owned by the remote endpoint. ? Resampling: ?"
+        : "???????????? ? ?????"
     }
     let sourceRate = model.signalSampleRate.trimmingCharacters(in: .whitespacesAndNewlines)
     let engineRate = model.signalEngineSampleRate.trimmingCharacters(in: .whitespacesAndNewlines)
     var parts: [String] = []
     if !sourceRate.isEmpty && !engineRate.isEmpty {
-      parts.append(sourceRate == engineRate ? sourceRate : "\(sourceRate) → \(engineRate)")
+      parts.append(sourceRate == engineRate ? sourceRate : "\(sourceRate) ? \(engineRate)")
     } else if !engineRate.isEmpty {
       parts.append(engineRate)
     }
     if !model.signalChannelCount.isEmpty { parts.append(model.signalChannelCount) }
     parts.append(model.signalEngineRunning
-      ? (english ? "Engine running" : "引擎运行中")
-      : (english ? "Engine idle" : "引擎空闲"))
+      ? (english ? "Engine running" : "?????")
+      : (english ? "Engine idle" : "????"))
     parts.append(resamplingLabel(decoderResampling))
-    return parts.joined(separator: " · ")
+    return parts.joined(separator: " ? ")
   }
 
   private var outputTitle: String {
     switch model.outputMode {
-    case "local": return english ? "Local output" : "本机输出"
-    case "pc": return english ? "ECHO control" : "ECHO 控制"
-    case "phone": return english ? "ECHO stream" : "ECHO 串流"
-    case "remoteControl": return english ? "Poweramp control" : "Poweramp 控制"
-    case "remoteStream": return english ? "Poweramp stream" : "Poweramp 串流"
-    case "streaming": return english ? "NetEase stream" : "网易云串流"
-    default: return english ? "Output" : "输出"
+    case "local": return english ? "Local output" : "????"
+    case "pc": return english ? "ECHO control" : "ECHO ??"
+    case "phone": return english ? "ECHO stream" : "ECHO ??"
+    case "remoteControl": return english ? "Poweramp control" : "Poweramp ??"
+    case "remoteStream": return english ? "Poweramp stream" : "Poweramp ??"
+    case "streaming": return english ? "NetEase stream" : "?????"
+    default: return english ? "Output" : "??"
     }
   }
 
@@ -2354,11 +2355,11 @@ private struct EchoNativeSignalPathSheet: View {
     let remote = model.signalRemoteOutput.trimmingCharacters(in: .whitespacesAndNewlines)
     switch model.outputMode {
     case "local":
-      parts.append(english ? "AVAudioEngine on this iPhone" : "本机 AVAudioEngine")
+      parts.append(english ? "AVAudioEngine on this iPhone" : "?? AVAudioEngine")
     case "phone", "remoteStream", "streaming":
-      parts.append(english ? "Downloaded then played locally" : "先缓存再本机播放")
+      parts.append(english ? "Downloaded then played locally" : "????????")
     case "pc", "remoteControl":
-      parts.append(english ? "Remote device renders audio" : "远程设备负责发声")
+      parts.append(english ? "Remote device renders audio" : "????????")
     default:
       break
     }
@@ -2366,15 +2367,15 @@ private struct EchoNativeSignalPathSheet: View {
     if !remote.isEmpty { parts.append(remote) }
     let deviceFormat = [model.signalDeviceSampleRate, model.signalOutputBitDepth, model.signalDeviceChannelCount]
       .filter { !$0.isEmpty }
-      .joined(separator: " · ")
+      .joined(separator: " ? ")
     if !deviceFormat.isEmpty { parts.append(deviceFormat) }
     if model.signalDeviceLatencyMs > 0 {
-      parts.append(String(format: english ? "%.1f ms latency" : "%.1f ms 延迟", model.signalDeviceLatencyMs))
+      parts.append(String(format: english ? "%.1f ms latency" : "%.1f ms ??", model.signalDeviceLatencyMs))
     }
     if remoteMode {
       parts.append(model.connectionLabel)
     }
-    return parts.isEmpty ? (english ? "Route unknown" : "路径未知") : parts.joined(separator: " · ")
+    return parts.isEmpty ? (english ? "Route unknown" : "????") : parts.joined(separator: " ? ")
   }
 
   private var tone: Color {
@@ -2398,12 +2399,12 @@ private struct EchoNativeSignalPathSheet: View {
   }
 
   private var readinessLabel: String {
-    if !hasTrack { return english ? "No signal" : "无信号" }
-    if !pathOnline { return english ? "Disconnected" : "连接中断" }
-    if !usesLocalProcessing { return english ? "Remote active" : "远程链路活动" }
-    if model.signalEngineRunning { return english ? "Live" : "实时运行" }
-    if model.signalFileLoaded { return english ? "Ready" : "已就绪" }
-    return english ? "Preparing" : "准备中"
+    if !hasTrack { return english ? "No signal" : "???" }
+    if !pathOnline { return english ? "Disconnected" : "????" }
+    if !usesLocalProcessing { return english ? "Remote active" : "??????" }
+    if model.signalEngineRunning { return english ? "Live" : "????" }
+    if model.signalFileLoaded { return english ? "Ready" : "???" }
+    return english ? "Preparing" : "???"
   }
 
   private var clockValue: String {
@@ -2414,7 +2415,7 @@ private struct EchoNativeSignalPathSheet: View {
     for rate in [source, engine, device] where !rate.isEmpty && rates.last != rate {
       rates.append(rate)
     }
-    return rates.isEmpty ? (english ? "Unknown" : "未知") : rates.joined(separator: " → ")
+    return rates.isEmpty ? (english ? "Unknown" : "??") : rates.joined(separator: " ? ")
   }
 
   private var decoderResampling: Bool? {
@@ -2434,9 +2435,9 @@ private struct EchoNativeSignalPathSheet: View {
 
   private func resamplingLabel(_ active: Bool?) -> String {
     switch active {
-    case true: return english ? "Resampling: active" : "重采样：启用"
-    case false: return english ? "Resampling: bypassed" : "重采样：旁路"
-    case nil: return english ? "Resampling: ?" : "重采样：?"
+    case true: return english ? "Resampling: active" : "??????"
+    case false: return english ? "Resampling: bypassed" : "??????"
+    case nil: return english ? "Resampling: ?" : "?????"
     }
   }
 
@@ -2467,9 +2468,9 @@ private struct EchoNativeSignalPathSheet: View {
   private var header: some View {
     HStack(alignment: .top, spacing: 12) {
       VStack(alignment: .leading, spacing: 5) {
-        Text(english ? "Signal path" : "信号路径")
+        Text(english ? "Signal path" : "????")
           .font(echoFont(size: 25, weight: .bold, design: .rounded))
-        Text(english ? "\(summaryLabel) · 4 stages" : "\(summaryLabel) · 4 层")
+        Text(english ? "\(summaryLabel) ? 4 stages" : "\(summaryLabel) ? 4 ?")
           .font(echoFont(size: 12, weight: .semibold))
           .foregroundColor(tone)
       }
@@ -2481,7 +2482,7 @@ private struct EchoNativeSignalPathSheet: View {
           .echoGlass(tint: Color.white.opacity(0.14), in: Circle())
       }
       .buttonStyle(.plain)
-      .accessibilityLabel(english ? "Close signal path" : "关闭信号路径")
+      .accessibilityLabel(english ? "Close signal path" : "??????")
     }
   }
 
@@ -2508,10 +2509,10 @@ private struct EchoNativeSignalPathSheet: View {
 
   private var theater: some View {
     VStack(alignment: .leading, spacing: 14) {
-      sectionTitle(english ? "Signal theater" : "信号剧场", icon: "waveform.path.ecg")
+      sectionTitle(english ? "Signal theater" : "????", icon: "waveform.path.ecg")
       HStack(alignment: .firstTextBaseline) {
         VStack(alignment: .leading, spacing: 3) {
-          Text(english ? "PATH READINESS" : "链路就绪度")
+          Text(english ? "PATH READINESS" : "?????")
             .font(echoFont(size: 10, weight: .bold))
             .foregroundColor(echoInk.opacity(0.48))
           Text(readinessLabel)
@@ -2532,22 +2533,22 @@ private struct EchoNativeSignalPathSheet: View {
         tone: tone
       )
       LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-        metric(english ? "Source" : "音源", value: model.signalSourceLabel.isEmpty ? (english ? "Unknown" : "未知") : model.signalSourceLabel, detail: sourceSpec)
-        metric(english ? "Processing" : "处理", value: processingDetail, detail: usesLocalProcessing ? "AVAudioEngine" : (english ? "Remote endpoint" : "远程端"))
-        metric(english ? "Output" : "输出", value: outputTitle, detail: model.signalDeviceName.isEmpty ? (english ? "Unknown device" : "未知设备") : model.signalDeviceName)
-        metric(english ? "Clock" : "时钟", value: clockValue, detail: resamplingLabel(clockResampling))
+        metric(english ? "Source" : "??", value: model.signalSourceLabel.isEmpty ? (english ? "Unknown" : "??") : model.signalSourceLabel, detail: sourceSpec)
+        metric(english ? "Processing" : "??", value: processingDetail, detail: usesLocalProcessing ? "AVAudioEngine" : (english ? "Remote endpoint" : "???"))
+        metric(english ? "Output" : "??", value: outputTitle, detail: model.signalDeviceName.isEmpty ? (english ? "Unknown device" : "????") : model.signalDeviceName)
+        metric(english ? "Clock" : "??", value: clockValue, detail: resamplingLabel(clockResampling))
       }
     }
   }
 
   private var signalChain: some View {
     VStack(alignment: .leading, spacing: 12) {
-      sectionTitle(english ? "Full chain" : "完整链路", icon: "point.3.connected.trianglepath.dotted")
+      sectionTitle(english ? "Full chain" : "????", icon: "point.3.connected.trianglepath.dotted")
       VStack(spacing: 10) {
-        signalNode(index: "01", icon: "externaldrive.fill", title: english ? "Source" : "音源", value: model.signalSourceLabel.isEmpty ? (english ? "Unknown source" : "未知音源") : model.signalSourceLabel, detail: sourceDetail, provenance: sourceProvenance, nodeTone: hasTrack ? Color.green : echoInk.opacity(0.4))
-        signalNode(index: "02", icon: "cpu", title: english ? "Decode" : "解码", value: decodeValue, detail: decodeDetail, provenance: usesLocalProcessing ? model.signalTelemetrySource : (model.signalTelemetrySource == "reported" ? "reported" : "unverified"), nodeTone: model.signalFileLoaded || !usesLocalProcessing ? Color.green : echoGold)
-        signalNode(index: "03", icon: processingModules.isEmpty ? "checkmark.shield.fill" : "slider.horizontal.3", title: english ? "Process" : "处理", value: processingDetail, detail: usesLocalProcessing ? (english ? "Local DSP chain" : "本机 DSP 链") : (english ? "External processing" : "外部处理"), provenance: usesLocalProcessing ? model.signalTelemetrySource : "unverified", nodeTone: processingModules.isEmpty ? Color.green : echoGold)
-        signalNode(index: "04", icon: "hifispeaker.fill", title: english ? "Output" : "输出", value: outputTitle, detail: outputDetail, provenance: model.signalTelemetrySource, nodeTone: pathOnline ? Color.green : echoAccent)
+        signalNode(index: "01", icon: "externaldrive.fill", title: english ? "Source" : "??", value: model.signalSourceLabel.isEmpty ? (english ? "Unknown source" : "????") : model.signalSourceLabel, detail: sourceDetail, provenance: sourceProvenance, nodeTone: hasTrack ? Color.green : echoInk.opacity(0.4))
+        signalNode(index: "02", icon: "cpu", title: english ? "Decode" : "??", value: decodeValue, detail: decodeDetail, provenance: usesLocalProcessing ? model.signalTelemetrySource : (model.signalTelemetrySource == "reported" ? "reported" : "unverified"), nodeTone: model.signalFileLoaded || !usesLocalProcessing ? Color.green : echoGold)
+        signalNode(index: "03", icon: processingModules.isEmpty ? "checkmark.shield.fill" : "slider.horizontal.3", title: english ? "Process" : "??", value: processingDetail, detail: usesLocalProcessing ? (english ? "Local DSP chain" : "?? DSP ?") : (english ? "External processing" : "????"), provenance: usesLocalProcessing ? model.signalTelemetrySource : "unverified", nodeTone: processingModules.isEmpty ? Color.green : echoGold)
+        signalNode(index: "04", icon: "hifispeaker.fill", title: english ? "Output" : "??", value: outputTitle, detail: outputDetail, provenance: model.signalTelemetrySource, nodeTone: pathOnline ? Color.green : echoAccent)
       }
       .backgroundPreferenceValue(EchoNativeSignalIconAnchorKey.self) { anchors in
         GeometryReader { proxy in
@@ -2588,8 +2589,8 @@ private struct EchoNativeSignalPathSheet: View {
       .padding(.top, 12)
     } label: {
       disclosureLabel(
-        english ? "Signal doctor" : "信号医生",
-        detail: english ? "Inspect path quality and blockers" : "检查链路质量与限制",
+        english ? "Signal doctor" : "????",
+        detail: english ? "Inspect path quality and blockers" : "?????????",
         icon: "stethoscope"
       )
     }
@@ -2603,44 +2604,44 @@ private struct EchoNativeSignalPathSheet: View {
       VStack(alignment: .leading, spacing: 12) {
         if usesLocalProcessing, let profile = model.signalDacProfile {
           LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            metric(english ? "Current route" : "当前路由", value: profile.name, detail: model.signalDevicePortType.isEmpty ? profile.portType : model.signalDevicePortType)
-            metric(english ? "Current format" : "当前格式", value: [model.signalDeviceSampleRate, model.signalDeviceChannelCount].filter { !$0.isEmpty }.joined(separator: " · "), detail: provenanceText("observed"))
-            metric(english ? "Observed rates" : "观测采样率", value: profile.sampleRates.map(formatObservedRate).joined(separator: " · "), detail: english ? "Seen on this route" : "此路由历史观测")
-            metric(english ? "Observed channels" : "观测声道", value: profile.channelCounts.map { "\($0)ch" }.joined(separator: " · "), detail: english ? "Seen on this route" : "此路由历史观测")
-            metric(english ? "Latency / buffer" : "延迟 / 缓冲", value: String(format: "%.1f / %.1f ms", model.signalDeviceLatencyMs, model.signalDeviceIOBufferMs), detail: english ? "Output / I/O buffer" : "输出 / I/O 缓冲")
-            metric(english ? "System volume" : "系统音量", value: "\(Int((model.signalOutputVolume * 100).rounded()))%", detail: english ? "AVAudioSession output" : "AVAudioSession 输出")
+            metric(english ? "Current route" : "????", value: profile.name, detail: model.signalDevicePortType.isEmpty ? profile.portType : model.signalDevicePortType)
+            metric(english ? "Current format" : "????", value: [model.signalDeviceSampleRate, model.signalDeviceChannelCount].filter { !$0.isEmpty }.joined(separator: " ? "), detail: provenanceText("observed"))
+            metric(english ? "Observed rates" : "?????", value: profile.sampleRates.map(formatObservedRate).joined(separator: " ? "), detail: english ? "Seen on this route" : "???????")
+            metric(english ? "Observed channels" : "????", value: profile.channelCounts.map { "\($0)ch" }.joined(separator: " ? "), detail: english ? "Seen on this route" : "???????")
+            metric(english ? "Latency / buffer" : "?? / ??", value: String(format: "%.1f / %.1f ms", model.signalDeviceLatencyMs, model.signalDeviceIOBufferMs), detail: english ? "Output / I/O buffer" : "?? / I/O ??")
+            metric(english ? "System volume" : "????", value: "\(Int((model.signalOutputVolume * 100).rounded()))%", detail: english ? "AVAudioSession output" : "AVAudioSession ??")
           }
           VStack(alignment: .leading, spacing: 4) {
-            Text(english ? "ROUTE UID" : "路由 UID")
+            Text(english ? "ROUTE UID" : "?? UID")
               .font(echoFont(size: 9, weight: .bold))
               .foregroundColor(echoInk.opacity(0.45))
             Text(model.signalDeviceUID.isEmpty ? profile.id : model.signalDeviceUID)
               .font(echoFont(size: 10, weight: .medium, design: .monospaced))
               .foregroundColor(echoInk.opacity(0.58))
               .textSelection(.enabled)
-            Text(english ? "\(profile.observationCount) format observations · last seen" : "已记录 \(profile.observationCount) 次格式观测 · 最近出现")
+            Text(english ? "\(profile.observationCount) format observations ? last seen" : "??? \(profile.observationCount) ????? ? ????")
               .font(echoFont(size: 10, weight: .medium))
               .foregroundColor(echoInk.opacity(0.48))
             Text(profile.lastSeenAt, style: .relative)
               .font(echoFont(size: 10, weight: .semibold))
               .foregroundColor(echoInk.opacity(0.58))
           }
-          Text(english ? "This atlas records formats actually observed on the route. It does not claim the DAC's advertised maximum capability." : "图谱只记录此路由实际出现过的格式，不代表 DAC 宣称的最高能力。")
+          Text(english ? "This atlas records formats actually observed on the route. It does not claim the DAC's advertised maximum capability." : "???????????????????? DAC ????????")
             .font(echoFont(size: 10, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
         } else if model.signalTelemetrySource == "reported" {
           LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            metric(english ? "Remote device" : "远程设备", value: model.signalDeviceName, detail: model.signalDevicePortType.isEmpty ? model.signalRemoteOutput : model.signalDevicePortType)
-            metric(english ? "Reported format" : "上报格式", value: [model.signalDeviceSampleRate, model.signalOutputBitDepth, model.signalDeviceChannelCount].filter { !$0.isEmpty }.joined(separator: " · "), detail: provenanceText("reported"))
-            metric(english ? "Output mode" : "输出模式", value: model.signalExclusive.map { $0 ? "Exclusive" : "Shared" } ?? model.signalRemoteOutput, detail: english ? "Endpoint report" : "远程端上报")
-            metric(english ? "Latency" : "延迟", value: model.signalDeviceLatencyMs > 0 ? String(format: "%.1f ms", model.signalDeviceLatencyMs) : (english ? "Not reported" : "未上报"), detail: provenanceText("reported"))
+            metric(english ? "Remote device" : "????", value: model.signalDeviceName, detail: model.signalDevicePortType.isEmpty ? model.signalRemoteOutput : model.signalDevicePortType)
+            metric(english ? "Reported format" : "????", value: [model.signalDeviceSampleRate, model.signalOutputBitDepth, model.signalDeviceChannelCount].filter { !$0.isEmpty }.joined(separator: " ? "), detail: provenanceText("reported"))
+            metric(english ? "Output mode" : "????", value: model.signalExclusive.map { $0 ? "Exclusive" : "Shared" } ?? model.signalRemoteOutput, detail: english ? "Endpoint report" : "?????")
+            metric(english ? "Latency" : "??", value: model.signalDeviceLatencyMs > 0 ? String(format: "%.1f ms", model.signalDeviceLatencyMs) : (english ? "Not reported" : "???"), detail: provenanceText("reported"))
           }
-          Text(english ? "Remote values are accepted from the paired endpoint and are not independently measured by this iPhone." : "远程数据来自配对端上报，本机无法独立测量验证。")
+          Text(english ? "Remote values are accepted from the paired endpoint and are not independently measured by this iPhone." : "???????????????????????")
             .font(echoFont(size: 10, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
         } else {
           Label(
-            english ? "No verifiable DAC telemetry is available for this route." : "当前链路没有可验证的 DAC 遥测。",
+            english ? "No verifiable DAC telemetry is available for this route." : "?????????? DAC ???",
             systemImage: "questionmark.circle"
           )
           .font(echoFont(size: 12, weight: .medium))
@@ -2650,8 +2651,8 @@ private struct EchoNativeSignalPathSheet: View {
       .padding(.top, 12)
     } label: {
       disclosureLabel(
-        english ? "DAC capability atlas" : "DAC 能力图谱",
-        detail: model.signalDeviceName.isEmpty ? (english ? "Observed route capabilities" : "已观测路由能力") : model.signalDeviceName,
+        english ? "DAC capability atlas" : "DAC ????",
+        detail: model.signalDeviceName.isEmpty ? (english ? "Observed route capabilities" : "???????") : model.signalDeviceName,
         icon: "waveform.path.ecg"
       )
     }
@@ -2663,25 +2664,25 @@ private struct EchoNativeSignalPathSheet: View {
   @ViewBuilder
   private var doctorInsights: some View {
     if !hasTrack {
-      insight(english ? "WAITING" : "等待", title: english ? "No active signal" : "当前没有活动信号", detail: english ? "Start playback to inspect decode, DSP, and output state." : "开始播放后可检查解码、DSP 与输出状态。", advice: english ? "No action required." : "无需操作。", insightTone: echoInk.opacity(0.48))
+      insight(english ? "WAITING" : "??", title: english ? "No active signal" : "????????", detail: english ? "Start playback to inspect decode, DSP, and output state." : "???????????DSP ??????", advice: english ? "No action required." : "?????", insightTone: echoInk.opacity(0.48))
     } else {
       if !pathOnline {
-        insight(english ? "CONNECTION" : "连接", title: english ? "Remote path is unavailable" : "远程链路不可用", detail: model.connectionLabel, advice: english ? "Check the paired device and network, then reconnect." : "检查配对设备和网络后重新连接。", insightTone: echoAccent)
+        insight(english ? "CONNECTION" : "??", title: english ? "Remote path is unavailable" : "???????", detail: model.connectionLabel, advice: english ? "Check the paired device and network, then reconnect." : "???????????????", insightTone: echoAccent)
       }
       if usesLocalProcessing && !model.signalFileLoaded {
-        insight(english ? "DECODER" : "解码", title: english ? "Audio file is not loaded" : "音频文件尚未加载", detail: english ? "The local engine has not established a PCM stream." : "本机引擎尚未建立 PCM 音频流。", advice: english ? "Wait for caching to finish or retry playback." : "等待缓存完成，或重试播放。", insightTone: echoGold)
+        insight(english ? "DECODER" : "??", title: english ? "Audio file is not loaded" : "????????", detail: english ? "The local engine has not established a PCM stream." : "???????? PCM ????", advice: english ? "Wait for caching to finish or retry playback." : "?????????????", insightTone: echoGold)
       }
       if !model.signalSampleRate.isEmpty && !model.signalEngineSampleRate.isEmpty && model.signalSampleRate != model.signalEngineSampleRate {
-        insight(english ? "CLOCK" : "时钟", title: english ? "Sample-rate conversion is active" : "采样率转换已启用", detail: "\(model.signalSampleRate) → \(model.signalEngineSampleRate)", advice: english ? "This is expected when the decoded stream and engine rate differ." : "解码流与引擎采样率不同时，这是正常行为。", insightTone: echoGold)
+        insight(english ? "CLOCK" : "??", title: english ? "Sample-rate conversion is active" : "????????", detail: "\(model.signalSampleRate) ? \(model.signalEngineSampleRate)", advice: english ? "This is expected when the decoded stream and engine rate differ." : "????????????????????", insightTone: echoGold)
       }
       insight(
-        english ? "PROCESSING" : "处理",
-        title: processingModules.isEmpty ? (english ? "Direct processing path" : "处理链为直通") : (english ? "DSP modules are active" : "DSP 模块已介入"),
+        english ? "PROCESSING" : "??",
+        title: processingModules.isEmpty ? (english ? "Direct processing path" : "??????") : (english ? "DSP modules are active" : "DSP ?????"),
         detail: processingDetail,
-        advice: usesLocalProcessing ? (english ? "EQ and loudness changes are applied before the main mixer." : "EQ 与响度处理位于主混音器之前。") : (english ? "Detailed remote DSP telemetry is not exposed by this endpoint." : "当前远程端未提供详细 DSP 遥测。"),
+        advice: usesLocalProcessing ? (english ? "EQ and loudness changes are applied before the main mixer." : "EQ ??????????????") : (english ? "Detailed remote DSP telemetry is not exposed by this endpoint." : "?????????? DSP ???"),
         insightTone: processingModules.isEmpty ? Color.green : echoGold
       )
-      insight(english ? "INTEGRITY" : "完整性", title: english ? "Bit-perfect status is not asserted" : "未声明 Bit-perfect 状态", detail: english ? "iOS shared output and remote endpoints do not expose enough telemetry to prove a bit-perfect route." : "iOS 共享输出与远程端没有提供足够遥测，无法证明链路为 Bit-perfect。", advice: english ? "Treat the displayed format as observed metadata, not a bit-perfect guarantee." : "当前格式仅代表观测到的元数据，不代表 Bit-perfect 保证。", insightTone: echoInk.opacity(0.58))
+      insight(english ? "INTEGRITY" : "???", title: english ? "Bit-perfect status is not asserted" : "??? Bit-perfect ??", detail: english ? "iOS shared output and remote endpoints do not expose enough telemetry to prove a bit-perfect route." : "iOS ???????????????????????? Bit-perfect?", advice: english ? "Treat the displayed format as observed metadata, not a bit-perfect guarantee." : "?????????????????? Bit-perfect ???", insightTone: echoInk.opacity(0.58))
     }
   }
 
@@ -2689,7 +2690,7 @@ private struct EchoNativeSignalPathSheet: View {
     DisclosureGroup(isExpanded: $flightRecorderExpanded) {
       VStack(spacing: 0) {
         if model.signalRouteEvents.isEmpty {
-          Text(english ? "Route events will appear after a playback path is established." : "播放链路建立后会在这里记录路径事件。")
+          Text(english ? "Route events will appear after a playback path is established." : "??????????????????")
             .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(echoInk.opacity(0.55))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2704,8 +2705,8 @@ private struct EchoNativeSignalPathSheet: View {
       .padding(.top, 4)
     } label: {
       disclosureLabel(
-        english ? "Route flight recorder" : "路径飞行记录器",
-        detail: english ? "\(model.signalRouteEvents.count) recent events" : "最近 \(model.signalRouteEvents.count) 条事件",
+        english ? "Route flight recorder" : "???????",
+        detail: english ? "\(model.signalRouteEvents.count) recent events" : "?? \(model.signalRouteEvents.count) ???",
         icon: "clock.arrow.circlepath"
       )
     }
@@ -2798,8 +2799,8 @@ private struct EchoNativeSignalPathSheet: View {
 
   private func provenanceText(_ kind: String) -> String {
     switch kind {
-    case "observed": return english ? "Observed" : "已观测"
-    case "reported": return english ? "Remote reported" : "远程上报"
+    case "observed": return english ? "Observed" : "???"
+    case "reported": return english ? "Remote reported" : "????"
     default: return "?"
     }
   }
@@ -2895,7 +2896,7 @@ struct EchoNativeEqualizerSheet: View {
         VStack(alignment: .leading, spacing: 3) {
           Text("EQ")
             .font(echoFont(size: 24, weight: .bold))
-          Text(model.language == "en" ? "10-band equalizer" : "十段均衡器")
+          Text(model.language == "en" ? "10-band equalizer" : "?????")
             .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(echoInk.opacity(0.52))
         }
@@ -2915,7 +2916,7 @@ struct EchoNativeEqualizerSheet: View {
             .echoGlass(tint: Color.white.opacity(0.14), in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(model.language == "en" ? "Close equalizer" : "关闭均衡器")
+        .accessibilityLabel(model.language == "en" ? "Close equalizer" : "?????")
       }
 
       HStack(alignment: .firstTextBaseline) {
@@ -3009,7 +3010,7 @@ struct EchoNativeEqualizerSheet: View {
 
   private func presetLabel(_ key: String) -> String {
     let english = ["flat": "Flat", "bass": "Bass", "vocal": "Vocal", "clarity": "Clarity", "warm": "Warm", "lateNight": "Late Night", "custom": "Custom"]
-    let chinese = ["flat": "平直", "bass": "低频", "vocal": "人声", "clarity": "清晰", "warm": "暖声", "lateNight": "夜间", "custom": "手动"]
+    let chinese = ["flat": "??", "bass": "??", "vocal": "??", "clarity": "??", "warm": "??", "lateNight": "??", "custom": "??"]
     return (model.language == "en" ? english : chinese)[key] ?? key
   }
 }
