@@ -230,6 +230,8 @@ final class EchoNativeNeteaseClient: @unchecked Sendable {
     self.cookie = cookie
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 20
+    configuration.timeoutIntervalForResource = 40
+    configuration.waitsForConnectivity = true
     session = URLSession(configuration: configuration)
   }
 
@@ -270,12 +272,25 @@ final class EchoNativeNeteaseClient: @unchecked Sendable {
     return playlists
   }
 
-  func search(_ keywords: String) async throws -> [EchoNativeCoreTrack] {
+  func search(_ keywords: String, limit: Int = 50) async throws -> [EchoNativeCoreTrack] {
     struct Response: Decodable { struct Result: Decodable { let songs: [Song]? }; let result: Result? }
     let response: Response = try await request(path: direct ? "/api/cloudsearch/pc" : "/cloudsearch", values: [
-      direct ? "s" : "keywords": keywords, "limit": "50", "offset": "0", "type": "1",
+      direct ? "s" : "keywords": keywords, "limit": String(max(1, min(50, limit))), "offset": "0", "type": "1",
     ])
     return (response.result?.songs ?? []).compactMap(\.track)
+  }
+
+  func dailyRecommendations() async throws -> [EchoNativeCoreTrack] {
+    struct Response: Decodable {
+      struct Value: Decodable { let dailySongs: [Song]? }
+      let data: Value?
+      let recommend: [Song]?
+    }
+    let response: Response = try await request(
+      path: direct ? "/api/v3/discovery/recommend/songs" : "/recommend/songs",
+      values: direct ? ["total": "true"] : [:]
+    )
+    return (response.data?.dailySongs ?? response.recommend ?? []).compactMap(\.track)
   }
 
   func playlistTracks(id: String) async throws -> [EchoNativeCoreTrack] {
@@ -485,10 +500,7 @@ final class EchoNativeNeteaseClient: @unchecked Sendable {
       body.queryItems = formValues.map { URLQueryItem(name: $0.key, value: $0.value) }
       request.httpBody = body.percentEncodedQuery?.data(using: .utf8)
     }
-    let (data, response) = try await session.data(for: request)
-    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-      throw EchoNativeNetworkError.invalidResponse
-    }
+    let data = try await responseData(for: request)
     let decoder = JSONDecoder()
     if let status = try? decoder.decode(ApiStatus.self, from: data), let code = status.code,
       code != 200, ![800, 801, 802, 803].contains(code) {
@@ -496,5 +508,32 @@ final class EchoNativeNeteaseClient: @unchecked Sendable {
     }
     do { return try decoder.decode(T.self, from: data) }
     catch { throw EchoNativeNetworkError.invalidResponse }
+  }
+
+  private enum RetryableResponse: Error { case status }
+
+  private func responseData(for request: URLRequest) async throws -> Data {
+    for attempt in 0..<2 {
+      do {
+        try Task.checkCancellation()
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw EchoNativeNetworkError.invalidResponse }
+        if http.statusCode == 429 || (500...599).contains(http.statusCode) { throw RetryableResponse.status }
+        guard (200..<300).contains(http.statusCode), data.count <= 12 * 1_024 * 1_024 else {
+          throw EchoNativeNetworkError.invalidResponse
+        }
+        return data
+      } catch is RetryableResponse {
+        guard attempt == 0 else { throw EchoNativeNetworkError.invalidResponse }
+      } catch let error as URLError {
+        let transient: Set<URLError.Code> = [
+          .cannotConnectToHost, .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet,
+          .resourceUnavailable, .timedOut,
+        ]
+        guard attempt == 0, transient.contains(error.code) else { throw error }
+      }
+      try await Task.sleep(nanoseconds: 400_000_000)
+    }
+    throw EchoNativeNetworkError.invalidResponse
   }
 }

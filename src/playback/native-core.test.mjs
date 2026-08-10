@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('the app boots the native core and keeps playback mutations ordered', async () => {
-  const [app, engine, store, payload, coreTypes, metadata, pages, player, desktopLyrics, remoteClients, neteaseLogin, localLibrary] = await Promise.all([
+  const [app, engine, store, payload, coreTypes, metadata, pages, player, desktopLyrics, remoteClients, neteaseLogin, localLibrary, widget, widgetPlugin, splash] = await Promise.all([
     readFile(new URL('../../App.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoAudioDspModule.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeAppStore.swift', import.meta.url), 'utf8'),
@@ -16,6 +16,9 @@ test('the app boots the native core and keeps playback mutations ordered', async
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeRemoteClients.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNeteaseLoginView.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeLocalLibrary.swift', import.meta.url), 'utf8'),
+    readFile(new URL('../../targets/EchoWidget/EchoWidget.swift', import.meta.url), 'utf8'),
+    readFile(new URL('../../plugins/withEchoWidget.js', import.meta.url), 'utf8'),
+    readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeSplashView.swift', import.meta.url), 'utf8'),
   ]);
   const nativeEntry = app.slice(app.indexOf('function NativeEchoApp'), app.indexOf('export default function App'));
   const appEntry = app.slice(app.indexOf('export default function App'));
@@ -33,6 +36,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   const trackDetails = player.slice(player.indexOf('private func trackDetails'), progressControlStart);
   const playbackModeSymbolStart = player.indexOf('private var playbackModeSymbol');
   const secondaryControls = player.slice(player.indexOf('private func secondaryControls'), playbackModeSymbolStart);
+  const moreControls = player.slice(player.indexOf('private var moreControls'), player.indexOf('private var outputControl'));
   const streamingPlaylistStart = pages.indexOf('private func streamingPlaylistGridCard');
   const libraryPlaylistCard = pages.slice(pages.indexOf('private func libraryPlaylistCard'), streamingPlaylistStart);
   const libraryTrackRowStart = pages.indexOf('private func libraryTrackRow');
@@ -201,24 +205,63 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /canvasWidth\(for: configuration\.widthScale\)/u);
   assert.match(desktopLyrics, /canvasHeight\(for: configuration\.heightScale\)/u);
   assert.match(desktopLyrics, /CIFilter\.gaussianBlur\(\)/u);
-  assert.match(desktopLyrics, /withTimeInterval: 1\.0 \/ 30\.0/u);
+  assert.match(desktopLyrics, /Timer\.scheduledTimer\(withTimeInterval: 1\.0 \/ 30\.0/u);
+  assert.doesNotMatch(desktopLyrics, /withTimeInterval: 0\.5/u);
   assert.match(desktopLyrics, /timescale: 30/u);
   assert.match(desktopLyrics, /previousLyric = currentLyric/u);
   assert.match(desktopLyrics, /drawCover\(in: cover/u);
   assert.match(desktopLyrics, /artworkBackgroundImage/u);
   assert.match(desktopLyrics, /positionUpdatedAt/u);
-  assert.match(desktopLyrics, /private let renderScale = 2/u);
+  assert.match(desktopLyrics, /private var hasRenderedFrame = false/u);
+  assert.match(desktopLyrics, /guard displayLayer\.isReadyForMoreMediaData, let sampleBuffer = makeSampleBuffer\(\) else \{ return \}/u);
+  assert.match(desktopLyrics, /hasRenderedFrame,[\s\S]*pictureInPictureController\.isPictureInPicturePossible/u);
+  assert.doesNotMatch(desktopLyrics, /renderScale/u);
   assert.match(desktopLyrics, /paragraph\.alignment = \.left/u);
   assert.match(desktopLyrics, /let lines = text\.components\(separatedBy: \.newlines\)/u);
   assert.match(desktopLyrics, /lineWidth \* CGFloat\(progress\)/u);
   assert.match(desktopLyrics, /private func lyricScrollOffset/u);
   assert.match(desktopLyrics, /lineWidth \* CGFloat\(progress\) - viewportWidth \* 0\.78/u);
   assert.match(desktopLyrics, /private func drawRainbowText/u);
-  assert.match(desktopLyrics, /rainbowColor\(position: position, phase: phase/u);
+  assert.match(desktopLyrics, /context\.beginTransparencyLayer/u);
+  assert.match(desktopLyrics, /context\.setBlendMode\(\.sourceIn\)/u);
+  assert.doesNotMatch(desktopLyrics, /for character in text/u);
+  assert.match(desktopLyrics, /saturation: 0\.38/u);
+  assert.match(desktopLyrics, /restoreRequested = true/u);
+  assert.match(desktopLyrics, /self\.trackKey != trackKey/u);
+  assert.match(desktopLyrics, /max\(8, inset - 8\)/u);
+  assert.ok(desktopLyrics.indexOf('drawBackground(in: context') < desktopLyrics.indexOf('drawVisualizer(in: context'));
+  assert.ok(desktopLyrics.indexOf('drawVisualizer(in: context') < desktopLyrics.indexOf('drawCover(in: cover'));
+  assert.match(desktopLyrics, /case "wave":/u);
+  assert.match(desktopLyrics, /case "pulse":/u);
+  assert.match(desktopLyrics, /private var visualizationLevel/u);
+  assert.match(desktopLyrics, /private static let artworkCache/u);
+  assert.match(store, /addRecent\(updated\)/u);
+  assert.match(store, /lyrics = track\.externalLyrics \?\? ""/u);
+  assert.match(store, /value\.artworkUrl = cached\.artworkUrl/u);
+  assert.match(coreTypes, /var externalArtworkUrl: String\?/u);
+  assert.doesNotMatch(store, /failedArtworkUrls/u);
+  assert.doesNotMatch(store, /externalLyricsByTrackKey/u);
+  assert.match(store, /scheduleExternalMetadataRetry\(for: currentTrack\)/u);
+  assert.match(store, /if candidates\.isEmpty \{\s+scheduleExternalMetadataRetry\(for: track\)/u);
+  assert.match(store, /let delays: \[UInt64\] = \[2, 8, 30\]/u);
+  assert.match(store, /neteaseClient: metadataNeteaseClient/u);
+  assert.match(store, /scheduleLocalMetadataEmbedding\(updated\)/u);
+  assert.match(store, /scannedTracks\.map \{ resolvedTrack\(\$0, includeLibraryFallback: false\) \}/u);
+  assert.match(store, /values\.1\.map \{ resolvedTrack\(\$0, includeLibraryFallback: false\) \}/u);
+  assert.match(metadata, /configuration\.waitsForConnectivity = true/u);
+  assert.match(metadata, /client\.search\("\\\(track\.title\) \\\(track\.artist\)", limit: 8\)/u);
+  assert.doesNotMatch(store.slice(artworkLookupStart, store.indexOf('private func resetLibraryArtworkLookup')), /externalMetadataSkipExisting/u);
+  assert.match(metadata, /cacheLyrics\(_ lyrics: String/u);
+  assert.match(metadata, /static func text\(from url: URL\) async/u);
+  assert.match(remoteClients, /private func responseData\(for request: URLRequest\)/u);
+  assert.match(localLibrary, /static func embedExternalMetadata/u);
+  assert.match(localLibrary, /appendingPathExtension\("echo-metadata\.json"\)/u);
   assert.match(coreTypes, /var desktopLyricsFontSize = 32\.0/u);
   assert.match(coreTypes, /var desktopLyricsRainbowGradient = false/u);
+  assert.match(coreTypes, /var desktopLyricsVisualizer = "off"/u);
   assert.match(payload, /desktopLyricsSize"[\s\S]*min: 18, max: 48/u);
   assert.match(payload, /toggle\("desktopLyricsRainbowGradient"/u);
+  assert.match(payload, /picker\("desktopLyricsVisualizer"/u);
   assert.doesNotMatch(desktopLyrics, /NSShadow|panelColor|motionOffset/u);
   assert.match(metadata, /\.joined\(separator: "\\n"\)/u);
   assert.match(store, /attachDesktopLyrics\(to view: UIView\)/u);
@@ -245,7 +288,10 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(player, /model\.repeatOne/u);
   assert.equal((player.match(/themedTab\(playerBackground: true\)/gu) ?? []).length, 2);
   assert.match(themedTab, /EchoNativeArtworkBackdrop\(/u);
-  assert.match(themedTab, /echoWarmBackground\.ignoresSafeArea\(\)/u);
+  assert.match(themedTab, /appearanceBackground == "artwork"[\s\S]*appearanceBackground == "custom"[\s\S]*echoThemeBackground/u);
+  assert.match(themedTab, /EchoNativeSakuraBackdrop/u);
+  assert.match(player, /private struct EchoNativeSakuraBackdrop/u);
+  assert.doesNotMatch(player, /EchoNativeThemePattern/u);
   assert.doesNotMatch(lyricsScroller, /scrollClipDisabled/u);
   assert.match(lyricsScroller, /let timeMs = line\.milliseconds/u);
   assert.match(lyricsScroller, /Text\(line\.text\)[\s\S]*\.shadow\(color: active/u);
@@ -286,6 +332,39 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(remoteClients, /host == "music\.126\.net" \|\| host\.hasSuffix\("\.music\.126\.net"\)/u);
   assert.match(remoteClients, /path: "\/api\/song\/enhance\/player\/url"/u);
   assert.match(remoteClients, /func trackDetail\(trackId: String\)/u);
+  assert.match(remoteClients, /func dailyRecommendations\(\)/u);
+  assert.match(store, /refreshDailyRecommendations\(force: false\)/u);
+  assert.match(payload, /"recommendedTracks": persistent\.streamingRecommendedTracks/u);
+  assert.match(pages, /"action": "streamingRecommendationsRefresh"/u);
+  assert.match(payload, /let appearanceSection = section\("appearance"/u);
+  assert.match(payload, /let motionSection = section\("motion"/u);
+  assert.match(coreTypes, /var appearanceBackground = "theme"/u);
+  assert.match(coreTypes, /desktopLyricsWidthScale = max\(0\.2, min\(1\.0, decodedWidthScale \?\? 1\.0\)\)/u);
+  assert.doesNotMatch(coreTypes, /appearancePattern|backgroundMotionEnabled|artworkMotionEnabled/u);
+  assert.doesNotMatch(payload, /appearancePattern|backgroundMotion|toggle\("artworkMotion"/u);
+  assert.match(pages, /ColorPicker\(/u);
+  assert.match(pages, /"action": "settingResetSection"/u);
+  assert.match(store, /private func resetSettingsSection/u);
+  assert.match(store, /case "playback":[\s\S]*playerModel\.eqEnabled = false/u);
+  assert.match(store, /case "audioTags":[\s\S]*playerModel\.tags = tags\(for: currentTrack\)/u);
+  assert.doesNotMatch(pages, /row\.resettable/u);
+  assert.match(desktopLyrics, /currentLyric\.isEmpty \? "暂无歌曲数据"/u);
+  assert.match(desktopLyrics, /let bars: \[CGFloat\]/u);
+  assert.ok(moreControls.indexOf('trackFavoriteCurrent') < moreControls.indexOf('Divider()'));
+  assert.ok(moreControls.indexOf('desktopLyricsEnabled') < moreControls.indexOf('externalMetadataRefresh'));
+  assert.ok(moreControls.indexOf('externalMetadataRefresh') < moreControls.indexOf('showSignalPath = true'));
+  assert.ok(moreControls.indexOf('showSignalPath = true') < moreControls.indexOf('showEqualizer = true'));
+  assert.match(payload, /"label": nowPlayingLabel/u);
+  assert.match(widget, /supportedFamilies\(\[\.systemSmall, \.systemMedium\]\)/u);
+  assert.match(widgetPlugin, /addTarget\(targetName, 'app_extension'/u);
+  assert.match(widgetPlugin, /'PBXSourcesBuildPhase', 'Sources', target\.uuid/u);
+  assert.match(player, /EchoNativeSplashView\(/u);
+  assert.match(player, /Task\.sleep\(nanoseconds: 2_000_000_000\)/u);
+  assert.match(splash, /EchoSplashSakuraField\(count: 100/u);
+  assert.match(splash, /for petal in 0\.\.<5/u);
+  assert.match(splash, /Text\("ECHO"\)/u);
+  assert.match(splash, /Text\("ささやき"\)/u);
+  assert.match(splash, /Text\("正在启动"\)/u);
   assert.match(remoteClients, /path: direct \? "\/api\/song\/lyric" : "\/lyric"/u);
   assert.match(remoteClients, /let tlyric: Lyrics\?/u);
   assert.match(remoteClients, /func albumTracks\(albumId: String\)[\s\S]*library\/albums\/\\\(encodedPathComponent\(albumId\)\)\/tracks/u);

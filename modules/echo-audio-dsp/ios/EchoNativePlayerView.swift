@@ -35,7 +35,7 @@ private func echoAdaptiveColor(light: UIColor, dark: UIColor) -> Color {
 }
 
 let echoInk = Color.primary
-let echoAccent = Color(red: 0.67, green: 0.12, blue: 0.14)
+let echoAccent = Color.accentColor
 let echoGold = Color(red: 0.82, green: 0.55, blue: 0.08)
 let echoPageHeaderBackground = echoAdaptiveColor(
   light: UIColor(red: 0.97, green: 0.79, blue: 0.73, alpha: 1),
@@ -60,6 +60,56 @@ var echoWarmBackground: LinearGradient {
     startPoint: .topLeading,
     endPoint: .bottomTrailing
   )
+}
+
+func echoColor(hex: String) -> Color {
+  let value = UInt64(hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted), radix: 16) ?? 0xAC1F24
+  return Color(
+    red: Double((value >> 16) & 0xff) / 255,
+    green: Double((value >> 8) & 0xff) / 255,
+    blue: Double(value & 0xff) / 255
+  )
+}
+
+func echoHex(color: Color) -> String? {
+  var red: CGFloat = 0
+  var green: CGFloat = 0
+  var blue: CGFloat = 0
+  var alpha: CGFloat = 0
+  guard UIColor(color).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return nil }
+  return String(
+    format: "%02X%02X%02X",
+    Int((red * 255).rounded()),
+    Int((green * 255).rounded()),
+    Int((blue * 255).rounded())
+  )
+}
+
+func echoFont(
+  size: CGFloat,
+  weight: Font.Weight = .regular,
+  design: Font.Design = .default
+) -> Font {
+  let scale = max(0.85, min(1.25, UserDefaults.standard.double(forKey: "echo.appearance.fontScale") == 0
+    ? 1
+    : UserDefaults.standard.double(forKey: "echo.appearance.fontScale")))
+  let adjustedSize = size * scale
+  let name = UserDefaults.standard.string(forKey: "echo.appearance.fontName") ?? ""
+  return name.isEmpty
+    ? .system(size: adjustedSize, weight: weight, design: design)
+    : .custom(name, size: adjustedSize).weight(weight)
+}
+
+private func echoThemeBackground(_ hex: String) -> some View {
+  let color = echoColor(hex: hex)
+  return ZStack {
+    echoWarmBackground
+    LinearGradient(
+      colors: [color.opacity(0.72), color.opacity(0.36), Color.white.opacity(0.08)],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+  }
 }
 
 extension View {
@@ -269,17 +319,22 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var alertMessage = ""
   @Published var alertTitle = ""
   @Published var artist = ""
+  @Published var appearanceBackground = "theme"
+  @Published var appearanceImageUrl = ""
   @Published var artworkBackgroundEnabled = true
   @Published var artworkUrl = ""
   @Published var connectionLabel = "ECHO未连接"
   @Published var connectionOnline = false
   @Published var controlsEnabled = false
+  @Published var customFontName = ""
   @Published var darkModeEnabled = false
   @Published var desktopLyricsEnabled = false
   @Published var durationMs = 0.0
   @Published var eqEnabled = false
   @Published var externalSourcePicker: EchoNativeExternalSourcePickerPayload?
   @Published var followSystemAppearance = true
+  @Published var fontScale = 1.0
+  @Published var hapticsEnabled = true
   @Published var isFavorite = false
   @Published var isPlaying = false
   @Published var language = "zh"
@@ -287,6 +342,7 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var lyricLines: [EchoNativeMetadataService.LyricLine] = []
   @Published var lyricsVisible = false
   @Published var metadataLoading = false
+  @Published var motionStyle = "subtle"
   @Published var outputMode = "local"
   @Published var playbackMode = EchoNativePlaybackMode.normal
   @Published var playbackLoading = false
@@ -318,6 +374,7 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var signalTelemetrySource = "unverified"
   @Published var tags: [String] = []
   @Published var title = ""
+  @Published var themeColorHex = "AC1F24"
   @Published var volume = 1.0
   private var lastExternalSourcePickerJSON = ""
   private var lastQueuePayloadJSON = ""
@@ -415,13 +472,15 @@ public final class EchoNativeAppView: ExpoView {
 }
 
 private struct EchoNativeAppScreen: View {
+  @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
   @ObservedObject var playerModel: EchoNativePlayerModel
   @ObservedObject var pagesModel: EchoNativePagesModel
   let onAction: ([String: Any]) -> Void
+  @State private var showingSplash = true
 
   var body: some View {
     ZStack {
-      echoWarmBackground.ignoresSafeArea()
+      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       Group {
         #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
@@ -433,7 +492,13 @@ private struct EchoNativeAppScreen: View {
         legacyTabView
         #endif
       }
-      .tint(echoAccent)
+      .tint(echoColor(hex: playerModel.themeColorHex))
+      .environment(\.font, echoFont(size: 17))
+      if showingSplash {
+        EchoNativeSplashView(forceReduceMotion: playerModel.motionStyle == "off")
+          .transition(.opacity)
+          .zIndex(100)
+      }
     }
     .sheet(item: $playerModel.externalSourcePicker) { payload in
       EchoNativeExternalSourcePicker(payload: payload, onAction: onAction)
@@ -448,6 +513,11 @@ private struct EchoNativeAppScreen: View {
       }
     } message: {
       Text(playerModel.alertMessage)
+    }
+    .task {
+      guard showingSplash else { return }
+      try? await Task.sleep(nanoseconds: 2_000_000_000)
+      withAnimation(.easeOut(duration: 0.55)) { showingSplash = false }
     }
   }
 
@@ -533,19 +603,30 @@ private struct EchoNativeAppScreen: View {
     @ViewBuilder content: () -> Content
   ) -> some View {
     ZStack {
-      if playerBackground {
+      if playerModel.appearanceBackground == "artwork" {
         EchoNativeArtworkBackdrop(
-          enabled: playerModel.artworkBackgroundEnabled,
+          enabled: true,
           identity: "\(playerModel.title)::\(playerModel.artist)",
-          urlString: playerModel.artworkBackgroundEnabled ? playerModel.artworkUrl : ""
+          urlString: playerModel.artworkUrl
         ) {
           onAction(["action": "artworkError", "url": playerModel.artworkUrl])
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+      } else if playerModel.appearanceBackground == "custom" {
+        EchoNativeArtworkBackdrop(
+          enabled: true,
+          identity: playerModel.appearanceImageUrl,
+          urlString: playerModel.appearanceImageUrl,
+          onError: {}
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
       } else {
-        echoWarmBackground.ignoresSafeArea()
+        echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       }
+      EchoNativeSakuraBackdrop(color: echoColor(hex: playerModel.themeColorHex))
+        .ignoresSafeArea()
 
       content()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -561,6 +642,64 @@ private struct EchoNativeAppScreen: View {
     case "search": return english ? "Search" : "搜索"
     case "connect": return english ? "Connect" : "连接"
     default: return english ? "Settings" : "设置"
+    }
+  }
+}
+
+private struct EchoNativeSakuraBackdrop: View {
+  let color: Color
+  var body: some View {
+    GeometryReader { geometry in
+      let blossomSize = min(380, max(220, geometry.size.width * 0.72))
+      Canvas { context, size in
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let radius = min(size.width, size.height) * 0.44
+        for index in 0..<5 {
+          context.drawLayer { petal in
+            petal.translateBy(x: center.x, y: center.y)
+            petal.rotate(by: .degrees(Double(index) * 72))
+            var path = Path()
+            path.move(to: .zero)
+            path.addCurve(
+              to: CGPoint(x: 0, y: -radius),
+              control1: CGPoint(x: radius * 0.5, y: -radius * 0.2),
+              control2: CGPoint(x: radius * 0.42, y: -radius * 0.78)
+            )
+            path.addCurve(
+              to: .zero,
+              control1: CGPoint(x: -radius * 0.42, y: -radius * 0.78),
+              control2: CGPoint(x: -radius * 0.5, y: -radius * 0.2)
+            )
+            petal.fill(path, with: .color(Color.white.opacity(0.1)))
+            petal.stroke(path, with: .color(color.opacity(0.2)), lineWidth: 1.4)
+          }
+        }
+        let core = CGRect(x: center.x - radius * 0.12, y: center.y - radius * 0.12, width: radius * 0.24, height: radius * 0.24)
+        context.fill(Path(ellipseIn: core), with: .color(echoGold.opacity(0.18)))
+      }
+      .frame(width: blossomSize, height: blossomSize)
+      .rotationEffect(.degrees(-18))
+      .position(
+        x: geometry.size.width - blossomSize * 0.18,
+        y: geometry.size.height - blossomSize * 0.12
+      )
+    }
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+  }
+}
+
+private struct EchoNativeArtworkMotion: ViewModifier {
+  let enabled: Bool
+  let style: String
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !enabled || reduceMotion || style == "off")) { timeline in
+      let phase = timeline.date.timeIntervalSinceReferenceDate * (style == "fluid" ? 0.7 : 0.42)
+      content
+        .scaleEffect(enabled && !reduceMotion ? 1 + sin(phase) * (style == "fluid" ? 0.018 : 0.008) : 1)
+        .rotationEffect(.degrees(enabled && !reduceMotion ? sin(phase * 0.7) * (style == "fluid" ? 0.9 : 0.32) : 0))
     }
   }
 }
@@ -696,7 +835,7 @@ struct EchoNativePlayerScreen: View {
 
       VStack(alignment: .leading, spacing: compact ? 3 : 5) {
         Text(titleLabel)
-          .font(.system(size: compact ? 17 : 20, weight: .bold))
+          .font(echoFont(size: compact ? 17 : 20, weight: .bold))
           .foregroundColor(echoInk)
           .lineLimit(2)
           .minimumScaleFactor(0.82)
@@ -706,7 +845,7 @@ struct EchoNativePlayerScreen: View {
           Text(albumLabel)
             .lineLimit(1)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(echoFont(size: 11, weight: .medium))
         .foregroundColor(echoInk.opacity(0.56))
         HStack(spacing: 5) {
           Image(systemName: "person.fill")
@@ -714,7 +853,7 @@ struct EchoNativePlayerScreen: View {
           Text(artistLabel)
             .lineLimit(1)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(echoFont(size: 11, weight: .medium))
         .foregroundColor(echoInk.opacity(0.56))
         if !model.tags.isEmpty {
           HStack(alignment: .top, spacing: 5) {
@@ -725,7 +864,7 @@ struct EchoNativePlayerScreen: View {
               .minimumScaleFactor(0.72)
               .fixedSize(horizontal: false, vertical: true)
           }
-          .font(.system(size: 9, weight: .bold))
+          .font(echoFont(size: 9, weight: .bold))
           .foregroundColor(echoInk.opacity(0.62))
         }
       }
@@ -735,7 +874,7 @@ struct EchoNativePlayerScreen: View {
         onAction(["action": "lyricsClose"])
       } label: {
         Image(systemName: "xmark")
-          .font(.system(size: 13, weight: .bold))
+          .font(echoFont(size: 13, weight: .bold))
           .foregroundColor(echoInk)
           .frame(width: 36, height: 36)
           .echoGlass(tint: Color.white.opacity(0.12), in: Circle())
@@ -759,7 +898,7 @@ struct EchoNativePlayerScreen: View {
             } label: {
               VStack(alignment: .leading, spacing: 3) {
                 Text(line.text)
-                  .font(.system(
+                  .font(echoFont(
                     size: active ? (compact ? 20 : 24) : (distance == 1 ? 18 : 16),
                     weight: active ? .bold : .semibold
                   ))
@@ -769,7 +908,7 @@ struct EchoNativePlayerScreen: View {
                   .shadow(color: active ? Color.white.opacity(0.7) : .clear, radius: 8)
                 if timeMs >= 0 {
                   Text(formatTime(timeMs))
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(echoFont(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(echoInk.opacity(0.32))
                 }
               }
@@ -823,7 +962,7 @@ struct EchoNativePlayerScreen: View {
       Text(albumLabel)
         .lineLimit(1)
     }
-      .font(.system(size: 13, weight: .semibold))
+      .font(echoFont(size: 13, weight: .semibold))
       .foregroundColor(echoInk)
       .multilineTextAlignment(.center)
       .frame(maxWidth: .infinity, alignment: .center)
@@ -855,6 +994,10 @@ struct EchoNativePlayerScreen: View {
         }
       }
       .frame(height: size)
+      .modifier(EchoNativeArtworkMotion(
+        enabled: model.motionStyle != "off",
+        style: model.motionStyle
+      ))
       .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.metadataLoading)
 
       if showsConnectionStatus {
@@ -870,7 +1013,7 @@ struct EchoNativePlayerScreen: View {
         .fill(model.connectionOnline ? echoGold : echoAccent)
         .frame(width: compact ? 5 : 6, height: compact ? 5 : 6)
       Text(model.connectionLabel)
-        .font(.system(size: compact ? 9 : 10, weight: .semibold))
+        .font(echoFont(size: compact ? 9 : 10, weight: .semibold))
         .foregroundColor(model.connectionOnline ? echoInk.opacity(0.66) : echoAccent)
         .lineLimit(1)
         .minimumScaleFactor(0.72)
@@ -884,7 +1027,7 @@ struct EchoNativePlayerScreen: View {
   private func trackDetails(compact: Bool) -> some View {
     VStack(spacing: compact ? 4 : 7) {
       Text(titleLabel)
-        .font(.system(size: compact ? 18 : 21, weight: .bold))
+        .font(echoFont(size: compact ? 18 : 21, weight: .bold))
         .foregroundColor(echoInk)
         .lineLimit(compact ? 1 : 2)
         .minimumScaleFactor(0.8)
@@ -895,7 +1038,7 @@ struct EchoNativePlayerScreen: View {
         Text(artistLabel)
           .lineLimit(1)
       }
-        .font(.system(size: 12, weight: .medium))
+        .font(echoFont(size: 12, weight: .medium))
         .foregroundColor(echoInk.opacity(0.58))
       if !model.tags.isEmpty {
         HStack(spacing: 5) {
@@ -905,7 +1048,7 @@ struct EchoNativePlayerScreen: View {
             .lineLimit(1)
             .minimumScaleFactor(0.65)
         }
-          .font(.system(size: 10, weight: .semibold))
+          .font(echoFont(size: 10, weight: .semibold))
           .foregroundColor(echoInk.opacity(0.62))
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity, alignment: .center)
@@ -945,7 +1088,7 @@ struct EchoNativePlayerScreen: View {
                 .offset(x: model.isPlaying ? 0 : 2)
             }
           }
-          .font(.system(size: compact ? 26 : 30, weight: .bold))
+          .font(echoFont(size: compact ? 26 : 30, weight: .bold))
           .foregroundColor(echoInk)
           .frame(width: compact ? 66 : 76, height: compact ? 66 : 76)
           .echoGlass(tint: Color.white.opacity(0.2), clear: false, in: Circle())
@@ -1020,7 +1163,7 @@ struct EchoNativePlayerScreen: View {
   private var volumeControl: some View {
     HStack(spacing: 9) {
       Image(systemName: "speaker.wave.1.fill")
-        .font(.system(size: 11, weight: .semibold))
+        .font(echoFont(size: 11, weight: .semibold))
         .foregroundColor(echoInk.opacity(0.52))
       Slider(
         value: $volumeValue,
@@ -1035,7 +1178,7 @@ struct EchoNativePlayerScreen: View {
       .accessibilityLabel(model.language == "en" ? "Volume" : "音量")
       .accessibilityValue("\(Int((volumeValue * 100).rounded()))%")
       Text("\(Int((volumeValue * 100).rounded()))%")
-        .font(.system(size: 10, weight: .bold, design: .monospaced))
+        .font(echoFont(size: 10, weight: .bold, design: .monospaced))
         .foregroundColor(echoInk.opacity(0.58))
         .frame(width: 34, alignment: .trailing)
     }
@@ -1057,25 +1200,6 @@ struct EchoNativePlayerScreen: View {
         )
       }
       .disabled(!model.controlsEnabled)
-      Button {
-        showSignalPath = true
-      } label: {
-        Label(model.language == "en" ? "Signal path" : "信号路径", systemImage: "waveform.path.ecg")
-      }
-      Button {
-        showEqualizer = true
-      } label: {
-        Label(model.language == "en" ? "Equalizer" : "均衡器", systemImage: "slider.horizontal.3")
-      }
-      Button {
-        onAction(["action": "externalMetadataRefresh"])
-      } label: {
-        Label(
-          model.language == "en" ? "Refresh external metadata" : "重新获取外源数据",
-          systemImage: "arrow.clockwise"
-        )
-      }
-      .disabled(model.metadataLoading)
 
       Divider()
       Toggle(isOn: Binding(
@@ -1090,8 +1214,28 @@ struct EchoNativePlayerScreen: View {
         )
       }
       .tint(echoAccent)
+      Button {
+        onAction(["action": "externalMetadataRefresh"])
+      } label: {
+        Label(
+          model.language == "en" ? "Refresh external metadata" : "重新获取外源数据",
+          systemImage: "arrow.clockwise"
+        )
+      }
+      .disabled(model.metadataLoading)
+      Button {
+        showSignalPath = true
+      } label: {
+        Label(model.language == "en" ? "Signal path" : "信号路径", systemImage: "waveform.path.ecg")
+      }
+      Button {
+        showEqualizer = true
+      } label: {
+        Label(model.language == "en" ? "Equalizer" : "均衡器", systemImage: "slider.horizontal.3")
+      }
 
       if model.showPlayerOutputInMenu {
+        Divider()
         Picker(selection: Binding(
           get: { outputSource },
           set: { onAction(["action": "outputSource", "mode": $0]) }
@@ -1119,7 +1263,7 @@ struct EchoNativePlayerScreen: View {
       }
     } label: {
       Image(systemName: "ellipsis")
-        .font(.system(size: 17, weight: .bold))
+        .font(echoFont(size: 17, weight: .bold))
         .foregroundColor(echoInk)
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.12), in: Circle())
@@ -1193,7 +1337,7 @@ struct EchoNativePlayerScreen: View {
   private func roundButton(symbol: String, label: String, size: CGFloat, action: @escaping () -> Void) -> some View {
     Button(action: action) {
       Image(systemName: symbol)
-        .font(.system(size: size * 0.34, weight: .bold))
+        .font(echoFont(size: size * 0.34, weight: .bold))
         .foregroundColor(echoInk)
         .frame(width: size, height: size)
         .echoGlass(tint: Color.white.opacity(0.12), in: Circle())
@@ -1220,7 +1364,7 @@ struct EchoNativePlayerScreen: View {
             removal: .scale(scale: 1.28).combined(with: .opacity)
           ))
       }
-      .font(.system(size: 16, weight: .semibold))
+      .font(echoFont(size: 16, weight: .semibold))
       .foregroundColor(active ? echoAccent : echoInk)
       .frame(width: 44, height: 44)
       .echoGlass(
@@ -1286,7 +1430,7 @@ private struct EchoNativeProgressControl: View {
         Spacer()
         Text(formatTime(durationMs))
       }
-      .font(.system(size: 10, weight: .medium, design: .monospaced))
+      .font(echoFont(size: 10, weight: .medium, design: .monospaced))
       .foregroundColor(echoInk.opacity(0.48))
     }
     .onAppear { seekValue = min(clock.positionMs, max(0, durationMs)) }
@@ -1435,9 +1579,9 @@ private struct EchoNativeExternalSourcePicker: View {
       HStack(alignment: .top, spacing: 12) {
         VStack(alignment: .leading, spacing: 6) {
           Text(payload.title)
-            .font(.system(size: 24, weight: .bold, design: .rounded))
+            .font(echoFont(size: 24, weight: .bold, design: .rounded))
           Text(payload.subtitle)
-            .font(.system(size: 13, weight: .medium))
+            .font(echoFont(size: 13, weight: .medium))
             .foregroundColor(echoInk.opacity(0.56))
         }
         Spacer(minLength: 8)
@@ -1446,7 +1590,7 @@ private struct EchoNativeExternalSourcePicker: View {
           dismiss()
         } label: {
           Image(systemName: "xmark")
-            .font(.system(size: 13, weight: .bold))
+            .font(echoFont(size: 13, weight: .bold))
             .frame(width: 44, height: 44)
             .echoGlass(tint: Color.white.opacity(0.12), in: Circle())
         }
@@ -1465,19 +1609,19 @@ private struct EchoNativeExternalSourcePicker: View {
 
               VStack(alignment: .leading, spacing: 5) {
                 Text(candidate.title)
-                  .font(.system(size: 15, weight: .bold))
+                  .font(echoFont(size: 15, weight: .bold))
                   .foregroundColor(echoInk)
                   .lineLimit(1)
                 Text([candidate.artist ?? "", candidate.sourceLabel]
                   .filter { !$0.isEmpty }
                   .joined(separator: " · "))
-                  .font(.system(size: 12, weight: .semibold))
+                  .font(echoFont(size: 12, weight: .semibold))
                   .foregroundColor(echoInk.opacity(0.5))
                   .lineLimit(1)
               }
               Spacer(minLength: 8)
               Text(candidate.availableLabel)
-                .font(.system(size: 11, weight: .semibold))
+                .font(echoFont(size: 11, weight: .semibold))
                 .foregroundColor(echoInk.opacity(0.46))
                 .multilineTextAlignment(.trailing)
             }
@@ -1519,7 +1663,7 @@ private struct EchoNativeExternalSourcePicker: View {
           dismiss()
         } label: {
           Text(payload.ignoreLabel)
-            .font(.system(size: 14, weight: .bold))
+            .font(echoFont(size: 14, weight: .bold))
             .foregroundColor(echoInk.opacity(0.68))
             .frame(maxWidth: .infinity)
             .frame(height: 46)
@@ -1535,7 +1679,7 @@ private struct EchoNativeExternalSourcePicker: View {
           dismiss()
         } label: {
           Text(payload.doneLabel)
-            .font(.system(size: 15, weight: .bold))
+            .font(echoFont(size: 15, weight: .bold))
             .foregroundColor(Color.white)
             .frame(maxWidth: .infinity)
             .frame(height: 46)
@@ -1597,9 +1741,9 @@ private struct EchoNativeExternalSourcePicker: View {
     } label: {
       VStack(spacing: 3) {
         Text(label)
-          .font(.system(size: 12, weight: .bold))
+          .font(echoFont(size: 12, weight: .bold))
         Text(available ? (selected ? payload.selectedLabel : payload.useSourceLabel) : payload.unavailableLabel)
-          .font(.system(size: 9, weight: .semibold))
+          .font(echoFont(size: 9, weight: .semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.75)
       }
@@ -1626,10 +1770,10 @@ private struct EchoNativeQueueSheet: View {
       HStack {
         VStack(alignment: .leading, spacing: 3) {
           Text(model.queuePayload?.title ?? (model.language == "en" ? "Queue" : "播放列表"))
-            .font(.system(size: 24, weight: .bold, design: .rounded))
+            .font(echoFont(size: 24, weight: .bold, design: .rounded))
           if let subtitle = model.queuePayload?.subtitle, !subtitle.isEmpty {
             Text(subtitle)
-              .font(.system(size: 11, weight: .semibold))
+              .font(echoFont(size: 11, weight: .semibold))
               .foregroundColor(echoInk.opacity(0.5))
               .lineLimit(1)
           }
@@ -1643,7 +1787,7 @@ private struct EchoNativeQueueSheet: View {
               clearQueue()
             }
           }
-          .font(.system(size: 12, weight: .bold))
+          .font(echoFont(size: 12, weight: .bold))
           .foregroundColor(echoAccent)
           .padding(.horizontal, 12)
           .frame(minHeight: 44)
@@ -1655,7 +1799,7 @@ private struct EchoNativeQueueSheet: View {
           dismiss()
         } label: {
           Image(systemName: "xmark")
-            .font(.system(size: 13, weight: .bold))
+            .font(echoFont(size: 13, weight: .bold))
             .frame(width: 44, height: 44)
             .echoGlass(tint: Color.white.opacity(0.12), in: Circle())
         }
@@ -1680,21 +1824,21 @@ private struct EchoNativeQueueSheet: View {
                     Group {
                       if item.current {
                         Image(systemName: "play.circle.fill")
-                          .font(.system(size: 19, weight: .bold))
+                          .font(echoFont(size: 19, weight: .bold))
                       } else {
                         Text(String(format: "%02d", index + 1))
-                          .font(.system(size: 11, weight: .bold, design: .monospaced))
+                          .font(echoFont(size: 11, weight: .bold, design: .monospaced))
                       }
                     }
                     .foregroundColor(item.current ? echoAccent : echoInk.opacity(0.36))
                     .frame(width: 26)
                     VStack(alignment: .leading, spacing: 3) {
                       Text(item.title)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(echoFont(size: 14, weight: .bold))
                         .foregroundColor(item.current ? echoAccent : echoInk)
                         .lineLimit(1)
                       Text(item.meta.isEmpty ? item.artist : "\(item.artist) · \(item.meta)")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(echoFont(size: 11, weight: .medium))
                         .foregroundColor(echoInk.opacity(0.48))
                         .lineLimit(1)
                     }
@@ -1757,9 +1901,9 @@ private struct EchoNativeQueueSheet: View {
       } else {
         VStack(spacing: 12) {
           Image(systemName: "music.note.list")
-            .font(.system(size: 28, weight: .medium))
+            .font(echoFont(size: 28, weight: .medium))
           Text(model.queuePayload?.emptyLabel ?? (model.language == "en" ? "The queue is empty." : "当前播放列表暂无内容。"))
-            .font(.system(size: 13, weight: .semibold))
+            .font(echoFont(size: 13, weight: .semibold))
         }
         .foregroundColor(echoInk.opacity(0.42))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1798,7 +1942,7 @@ private struct EchoNativeQueueSheet: View {
   ) -> some View {
     Button(action: action) {
       Image(systemName: symbol)
-        .font(.system(size: 12, weight: .bold))
+        .font(echoFont(size: 12, weight: .bold))
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
         .contentShape(Circle())
@@ -1879,7 +2023,7 @@ struct EchoNativeArtwork: View {
         endPoint: .bottomTrailing
       )
       Image(systemName: "waveform")
-        .font(.system(size: 34, weight: .medium))
+        .font(echoFont(size: 34, weight: .medium))
         .foregroundColor(echoInk.opacity(0.3))
     }
   }
@@ -2012,15 +2156,15 @@ private struct EchoNativeSignalLiveMeter: View {
       HStack(alignment: .firstTextBaseline) {
         VStack(alignment: .leading, spacing: 3) {
           Text(english ? "LIVE OUTPUT PEAK" : "实时输出峰值")
-            .font(.system(size: 10, weight: .bold))
+            .font(echoFont(size: 10, weight: .bold))
             .foregroundColor(echoInk.opacity(0.48))
           Text(detail)
-            .font(.system(size: 10, weight: .medium))
+            .font(echoFont(size: 10, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
         }
         Spacer(minLength: 8)
         Text(peakLabel)
-          .font(.system(size: 14, weight: .bold, design: .monospaced))
+          .font(echoFont(size: 14, weight: .bold, design: .monospaced))
           .foregroundColor(model.clipping || model.peakDb > -3 ? echoAccent : tone)
       }
       ProgressView(value: fill)
@@ -2030,7 +2174,7 @@ private struct EchoNativeSignalLiveMeter: View {
           english ? "Low headroom: reduce positive gain if clipping is audible." : "输出余量偏低；如出现削波，请降低正向增益。",
           systemImage: "exclamationmark.triangle.fill"
         )
-        .font(.system(size: 10, weight: .semibold))
+        .font(echoFont(size: 10, weight: .semibold))
         .foregroundColor(echoAccent)
       }
     }
@@ -2302,15 +2446,15 @@ private struct EchoNativeSignalPathSheet: View {
     HStack(alignment: .top, spacing: 12) {
       VStack(alignment: .leading, spacing: 5) {
         Text(english ? "Signal path" : "信号路径")
-          .font(.system(size: 25, weight: .bold, design: .rounded))
+          .font(echoFont(size: 25, weight: .bold, design: .rounded))
         Text(english ? "\(summaryLabel) · 4 stages" : "\(summaryLabel) · 4 层")
-          .font(.system(size: 12, weight: .semibold))
+          .font(echoFont(size: 12, weight: .semibold))
           .foregroundColor(tone)
       }
       Spacer(minLength: 8)
       Button { dismiss() } label: {
         Image(systemName: "xmark")
-          .font(.system(size: 13, weight: .bold))
+          .font(echoFont(size: 13, weight: .bold))
           .frame(width: 44, height: 44)
           .echoGlass(tint: Color.white.opacity(0.14), in: Circle())
       }
@@ -2322,10 +2466,10 @@ private struct EchoNativeSignalPathSheet: View {
   private var summary: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(sourceSpec)
-        .font(.system(size: 15, weight: .bold, design: .rounded))
+        .font(echoFont(size: 15, weight: .bold, design: .rounded))
         .foregroundColor(tone)
       Text(summaryDetail)
-        .font(.system(size: 12, weight: .medium))
+        .font(echoFont(size: 12, weight: .medium))
         .foregroundColor(echoInk.opacity(0.62))
         .fixedSize(horizontal: false, vertical: true)
       Divider()
@@ -2346,14 +2490,14 @@ private struct EchoNativeSignalPathSheet: View {
       HStack(alignment: .firstTextBaseline) {
         VStack(alignment: .leading, spacing: 3) {
           Text(english ? "PATH READINESS" : "链路就绪度")
-            .font(.system(size: 10, weight: .bold))
+            .font(echoFont(size: 10, weight: .bold))
             .foregroundColor(echoInk.opacity(0.48))
           Text(readinessLabel)
-            .font(.system(size: 20, weight: .bold, design: .rounded))
+            .font(echoFont(size: 20, weight: .bold, design: .rounded))
         }
         Spacer()
         Text("\(Int(pathReadiness * 100))%")
-          .font(.system(size: 14, weight: .bold, design: .monospaced))
+          .font(echoFont(size: 14, weight: .bold, design: .monospaced))
           .foregroundColor(tone)
       }
       ProgressView(value: pathReadiness)
@@ -2446,21 +2590,21 @@ private struct EchoNativeSignalPathSheet: View {
           }
           VStack(alignment: .leading, spacing: 4) {
             Text(english ? "ROUTE UID" : "路由 UID")
-              .font(.system(size: 9, weight: .bold))
+              .font(echoFont(size: 9, weight: .bold))
               .foregroundColor(echoInk.opacity(0.45))
             Text(model.signalDeviceUID.isEmpty ? profile.id : model.signalDeviceUID)
-              .font(.system(size: 10, weight: .medium, design: .monospaced))
+              .font(echoFont(size: 10, weight: .medium, design: .monospaced))
               .foregroundColor(echoInk.opacity(0.58))
               .textSelection(.enabled)
             Text(english ? "\(profile.observationCount) format observations · last seen" : "已记录 \(profile.observationCount) 次格式观测 · 最近出现")
-              .font(.system(size: 10, weight: .medium))
+              .font(echoFont(size: 10, weight: .medium))
               .foregroundColor(echoInk.opacity(0.48))
             Text(profile.lastSeenAt, style: .relative)
-              .font(.system(size: 10, weight: .semibold))
+              .font(echoFont(size: 10, weight: .semibold))
               .foregroundColor(echoInk.opacity(0.58))
           }
           Text(english ? "This atlas records formats actually observed on the route. It does not claim the DAC's advertised maximum capability." : "图谱只记录此路由实际出现过的格式，不代表 DAC 宣称的最高能力。")
-            .font(.system(size: 10, weight: .medium))
+            .font(echoFont(size: 10, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
         } else if model.signalTelemetrySource == "reported" {
           LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
@@ -2470,14 +2614,14 @@ private struct EchoNativeSignalPathSheet: View {
             metric(english ? "Latency" : "延迟", value: model.signalDeviceLatencyMs > 0 ? String(format: "%.1f ms", model.signalDeviceLatencyMs) : (english ? "Not reported" : "未上报"), detail: provenanceText("reported"))
           }
           Text(english ? "Remote values are accepted from the paired endpoint and are not independently measured by this iPhone." : "远程数据来自配对端上报，本机无法独立测量验证。")
-            .font(.system(size: 10, weight: .medium))
+            .font(echoFont(size: 10, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
         } else {
           Label(
             english ? "No verifiable DAC telemetry is available for this route." : "当前链路没有可验证的 DAC 遥测。",
             systemImage: "questionmark.circle"
           )
-          .font(.system(size: 12, weight: .medium))
+          .font(echoFont(size: 12, weight: .medium))
           .foregroundColor(echoInk.opacity(0.55))
         }
       }
@@ -2524,7 +2668,7 @@ private struct EchoNativeSignalPathSheet: View {
       VStack(spacing: 0) {
         if model.signalRouteEvents.isEmpty {
           Text(english ? "Route events will appear after a playback path is established." : "播放链路建立后会在这里记录路径事件。")
-            .font(.system(size: 12, weight: .medium))
+            .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(echoInk.opacity(0.55))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 12)
@@ -2550,21 +2694,21 @@ private struct EchoNativeSignalPathSheet: View {
 
   private func sectionTitle(_ title: String, icon: String) -> some View {
     Label(title, systemImage: icon)
-      .font(.system(size: 15, weight: .bold, design: .rounded))
+      .font(echoFont(size: 15, weight: .bold, design: .rounded))
       .foregroundColor(echoInk.opacity(0.78))
   }
 
   private func metric(_ title: String, value: String, detail: String) -> some View {
     VStack(alignment: .leading, spacing: 5) {
       Text(title.uppercased())
-        .font(.system(size: 9, weight: .bold))
+        .font(echoFont(size: 9, weight: .bold))
         .foregroundColor(echoInk.opacity(0.45))
       Text(value)
-        .font(.system(size: 13, weight: .bold, design: .rounded))
+        .font(echoFont(size: 13, weight: .bold, design: .rounded))
         .lineLimit(2)
         .minimumScaleFactor(0.75)
       Text(detail)
-        .font(.system(size: 10, weight: .medium))
+        .font(echoFont(size: 10, weight: .medium))
         .foregroundColor(echoInk.opacity(0.52))
         .lineLimit(2)
     }
@@ -2578,7 +2722,7 @@ private struct EchoNativeSignalPathSheet: View {
       ZStack {
         Circle().fill(nodeTone.opacity(0.14))
         Image(systemName: icon)
-          .font(.system(size: 15, weight: .semibold))
+          .font(echoFont(size: 15, weight: .semibold))
           .foregroundColor(nodeTone)
       }
       .frame(width: 38, height: 38)
@@ -2586,19 +2730,19 @@ private struct EchoNativeSignalPathSheet: View {
       VStack(alignment: .leading, spacing: 4) {
         HStack(spacing: 7) {
           Text(index)
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .font(echoFont(size: 9, weight: .bold, design: .monospaced))
             .foregroundColor(nodeTone)
           Text(title)
-            .font(.system(size: 11, weight: .bold))
+            .font(echoFont(size: 11, weight: .bold))
             .foregroundColor(echoInk.opacity(0.55))
           Spacer(minLength: 4)
           provenanceMark(provenance)
         }
         Text(value)
-          .font(.system(size: 14, weight: .bold, design: .rounded))
+          .font(echoFont(size: 14, weight: .bold, design: .rounded))
           .fixedSize(horizontal: false, vertical: true)
         Text(detail)
-          .font(.system(size: 11, weight: .medium))
+          .font(echoFont(size: 11, weight: .medium))
           .foregroundColor(echoInk.opacity(0.58))
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -2612,9 +2756,9 @@ private struct EchoNativeSignalPathSheet: View {
   private func disclosureLabel(_ title: String, detail: String, icon: String) -> some View {
     Label {
       VStack(alignment: .leading, spacing: 3) {
-        Text(title).font(.system(size: 14, weight: .bold, design: .rounded))
+        Text(title).font(echoFont(size: 14, weight: .bold, design: .rounded))
         Text(detail)
-          .font(.system(size: 10, weight: .medium))
+          .font(echoFont(size: 10, weight: .medium))
           .foregroundColor(echoInk.opacity(0.5))
       }
     } icon: {
@@ -2624,7 +2768,7 @@ private struct EchoNativeSignalPathSheet: View {
 
   private func provenanceMark(_ kind: String) -> some View {
     Label(provenanceText(kind), systemImage: provenanceIcon(kind))
-      .font(.system(size: 9, weight: .bold))
+      .font(echoFont(size: 9, weight: .bold))
       .foregroundColor(provenanceColor(kind))
       .lineLimit(1)
       .minimumScaleFactor(0.72)
@@ -2662,14 +2806,14 @@ private struct EchoNativeSignalPathSheet: View {
   private func insight(_ eyebrow: String, title: String, detail: String, advice: String, insightTone: Color) -> some View {
     VStack(alignment: .leading, spacing: 5) {
       Text(eyebrow)
-        .font(.system(size: 9, weight: .bold))
+        .font(echoFont(size: 9, weight: .bold))
         .foregroundColor(insightTone)
-      Text(title).font(.system(size: 13, weight: .bold, design: .rounded))
+      Text(title).font(echoFont(size: 13, weight: .bold, design: .rounded))
       Text(detail)
-        .font(.system(size: 11, weight: .medium))
+        .font(echoFont(size: 11, weight: .medium))
         .foregroundColor(echoInk.opacity(0.62))
       Text(advice)
-        .font(.system(size: 10, weight: .medium))
+        .font(echoFont(size: 10, weight: .medium))
         .foregroundColor(echoInk.opacity(0.48))
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2687,17 +2831,17 @@ private struct EchoNativeSignalPathSheet: View {
         .padding(.top, 6)
       VStack(alignment: .leading, spacing: 3) {
         HStack {
-          Text(event.title).font(.system(size: 12, weight: .bold))
+          Text(event.title).font(echoFont(size: 12, weight: .bold))
           Spacer()
           Text(event.at, style: .relative)
-            .font(.system(size: 9, weight: .medium))
+            .font(echoFont(size: 9, weight: .medium))
             .foregroundColor(echoInk.opacity(0.42))
         }
         Text(event.detail)
-          .font(.system(size: 10, weight: .medium))
+          .font(echoFont(size: 10, weight: .medium))
           .foregroundColor(echoInk.opacity(0.58))
         Text(event.trackTitle)
-          .font(.system(size: 9, weight: .semibold))
+          .font(echoFont(size: 9, weight: .semibold))
           .foregroundColor(echoInk.opacity(0.42))
           .lineLimit(1)
       }
@@ -2728,14 +2872,14 @@ struct EchoNativeEqualizerSheet: View {
       HStack {
         VStack(alignment: .leading, spacing: 3) {
           Text("EQ")
-            .font(.system(size: 24, weight: .bold))
+            .font(echoFont(size: 24, weight: .bold))
           Text(model.language == "en" ? "10-band equalizer" : "十段均衡器")
-            .font(.system(size: 12, weight: .medium))
+            .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(echoInk.opacity(0.52))
         }
         Spacer()
         Text(presetLabel(model.preset))
-          .font(.system(size: 11, weight: .bold))
+          .font(echoFont(size: 11, weight: .bold))
           .foregroundColor(echoAccent)
           .padding(.horizontal, 10)
           .frame(height: 28)
@@ -2744,7 +2888,7 @@ struct EchoNativeEqualizerSheet: View {
           dismiss()
         } label: {
           Image(systemName: "xmark")
-            .font(.system(size: 13, weight: .bold))
+            .font(echoFont(size: 13, weight: .bold))
             .frame(width: 44, height: 44)
             .echoGlass(tint: Color.white.opacity(0.14), in: Circle())
         }
@@ -2754,11 +2898,11 @@ struct EchoNativeEqualizerSheet: View {
 
       HStack(alignment: .firstTextBaseline) {
         Text(frequencyLabel(activeBand))
-          .font(.system(size: 13, weight: .semibold))
+          .font(echoFont(size: 13, weight: .semibold))
           .foregroundColor(echoInk.opacity(0.58))
         Spacer()
         Text(String(format: "%+.1f dB", model.gains[activeBand]))
-          .font(.system(size: 23, weight: .bold, design: .monospaced))
+          .font(echoFont(size: 23, weight: .bold, design: .monospaced))
       }
       .padding(.bottom, 10)
       .overlay(alignment: .bottom) { Rectangle().fill(echoInk.opacity(0.1)).frame(height: 1) }
@@ -2769,7 +2913,7 @@ struct EchoNativeEqualizerSheet: View {
           VStack {
             ForEach([12, 6, 0, -6, -12], id: \.self) { gain in
               Text("\(gain > 0 ? "+" : "")\(gain)dB")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(echoFont(size: 9, weight: .semibold, design: .monospaced))
                 .foregroundColor(echoInk.opacity(0.42))
               if gain != -12 { Spacer() }
             }
@@ -2815,7 +2959,7 @@ struct EchoNativeEqualizerSheet: View {
                 onAction(["action": "eqPreset", "preset": key])
               } label: {
                 Text(presetLabel(key))
-                  .font(.system(size: 12, weight: .bold))
+                  .font(echoFont(size: 12, weight: .bold))
                   .foregroundColor(model.preset == key ? echoAccent : echoInk.opacity(0.58))
                   .padding(.horizontal, 13)
                   .frame(height: 36)
@@ -2882,7 +3026,7 @@ private struct EchoNativeEqBand: View {
       }
       .frame(height: plotHeight)
       Text(label)
-        .font(.system(size: 9, weight: .bold, design: .monospaced))
+        .font(echoFont(size: 9, weight: .bold, design: .monospaced))
         .foregroundColor(echoInk.opacity(0.54))
         .lineLimit(1)
     }

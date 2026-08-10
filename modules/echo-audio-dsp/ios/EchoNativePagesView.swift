@@ -6,6 +6,7 @@ import Photos
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 private struct EchoNativePageOption: Decodable, Identifiable {
   let id: String
@@ -61,6 +62,8 @@ private struct EchoNativeLibraryStreaming: Decodable {
   let playlists: [EchoNativeStreamingPlaylist]
   let profileAvatarUrl: String?
   let profileName: String
+  let recommendationDate: String
+  let recommendedTracks: [EchoNativeLibraryTrack]
   let selectedPlaylistId: String
   let selectedPlaylistName: String
   let status: String
@@ -288,8 +291,8 @@ private struct EchoNativeSettingRow: Decodable, Identifiable {
 private struct EchoNativeSettingSection: Decodable, Identifiable {
   let description: String
   let id: String
+  let resettable: Bool
   var rows: [EchoNativeSettingRow]
-  let summary: String
   let symbol: String
   let title: String
 }
@@ -375,6 +378,9 @@ struct EchoNativePagesScreen: View {
   @State private var showNeteaseQrSaveError = false
   @State private var showDesktopLyricsBackgroundPicker = false
   @State private var desktopLyricsBackgroundItem: PhotosPickerItem?
+  @State private var showAppearanceBackgroundPicker = false
+  @State private var appearanceBackgroundItem: PhotosPickerItem?
+  @State private var showAppearanceFontImporter = false
   @State private var desktopLyricsBackgroundImportFailed = false
   @State private var selectedAlbumId = ""
   @State private var selectedAlbumArtworkUrl = ""
@@ -398,7 +404,8 @@ struct EchoNativePagesScreen: View {
       if let payload = model.payload {
         VStack(spacing: 0) {
           pageHeader(payload, title: pageTitle(payload.language))
-            .background(echoPageHeaderBackground)
+            .background(.ultraThinMaterial)
+            .background(echoAccent.opacity(0.16))
             .overlay(alignment: .bottom) {
               Rectangle()
                 .fill(echoInk.opacity(0.12))
@@ -463,6 +470,11 @@ struct EchoNativePagesScreen: View {
       selection: $desktopLyricsBackgroundItem,
       matching: .images
     )
+    .photosPicker(
+      isPresented: $showAppearanceBackgroundPicker,
+      selection: $appearanceBackgroundItem,
+      matching: .images
+    )
     .onChange(of: desktopLyricsBackgroundItem) { item in
       guard let item else { return }
       Task {
@@ -477,6 +489,38 @@ struct EchoNativePagesScreen: View {
         }
         onAction(["action": "desktopLyricsBackgroundImage", "data": encoded])
       }
+    }
+    .onChange(of: appearanceBackgroundItem) { item in
+      guard let item else { return }
+      Task {
+        defer { appearanceBackgroundItem = nil }
+        guard
+          let data = try? await item.loadTransferable(type: Data.self),
+          let image = UIImage(data: data),
+          let encoded = desktopLyricsBackgroundData(image)
+        else {
+          desktopLyricsBackgroundImportFailed = true
+          return
+        }
+        onAction(["action": "appearanceBackgroundImage", "data": encoded])
+      }
+    }
+    .fileImporter(
+      isPresented: $showAppearanceFontImporter,
+      allowedContentTypes: [.font],
+      allowsMultipleSelection: false
+    ) { result in
+      guard case .success(let urls) = result, let url = urls.first else {
+        desktopLyricsBackgroundImportFailed = true
+        return
+      }
+      let scoped = url.startAccessingSecurityScopedResource()
+      defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+      guard let data = try? Data(contentsOf: url) else {
+        desktopLyricsBackgroundImportFailed = true
+        return
+      }
+      onAction(["action": "appearanceFont", "data": data])
     }
     .fullScreenCover(item: $pairingScannerTarget) { target in
       EchoPairingScannerSheet(
@@ -562,13 +606,14 @@ struct EchoNativePagesScreen: View {
       HStack(spacing: 9) {
         if let symbol = pageHeaderSymbol {
           Image(systemName: symbol)
-            .font(.system(size: 18, weight: .semibold))
+            .font(echoFont(size: 18, weight: .semibold))
             .foregroundColor(echoInk.opacity(0.62))
             .accessibilityHidden(true)
         }
         Text(title)
-          .font(.system(size: 32, weight: .bold, design: .rounded))
+          .font(echoFont(size: 32, weight: .bold, design: .rounded))
           .lineLimit(1)
+          .minimumScaleFactor(0.78)
       }
       Spacer(minLength: 8)
       HStack(spacing: 7) {
@@ -576,12 +621,14 @@ struct EchoNativePagesScreen: View {
           .fill(statusColor(payload.status))
           .frame(width: 7, height: 7)
         Text(payload.status.label)
-          .font(.system(size: 11, weight: .bold))
+          .font(echoFont(size: 11, weight: .bold))
           .lineLimit(1)
+          .minimumScaleFactor(0.68)
       }
       .foregroundColor(statusColor(payload.status))
       .padding(.horizontal, 12)
       .frame(height: 34)
+      .frame(maxWidth: 210)
       .echoGlass(
         tint: statusColor(payload.status).opacity(0.08),
         clear: false,
@@ -688,7 +735,7 @@ struct EchoNativePagesScreen: View {
               onAction(["action": "streamingConnect"])
             } label: {
               Label(library.labels.empty, systemImage: "person.crop.circle.badge.plus")
-                .font(.system(size: 13, weight: .semibold))
+                .font(echoFont(size: 13, weight: .semibold))
                 .foregroundColor(echoInk.opacity(0.58))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
@@ -697,11 +744,50 @@ struct EchoNativePagesScreen: View {
             .buttonStyle(.plain)
           }
 
+          if library.streaming.loggedIn, !library.streaming.recommendedTracks.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+              HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(model.payload?.language == "en" ? "For You" : "为你推荐")
+                    .font(echoFont(size: 19, weight: .bold, design: .rounded))
+                  if !library.streaming.recommendationDate.isEmpty {
+                    Text(model.payload?.language == "en"
+                      ? "Daily picks · \(library.streaming.recommendationDate)"
+                      : "每日推荐 · \(library.streaming.recommendationDate)")
+                      .font(echoFont(size: 10, weight: .semibold))
+                      .foregroundColor(echoInk.opacity(0.48))
+                  }
+                }
+                Spacer()
+                Button {
+                  onAction(["action": "streamingRecommendationsRefresh"])
+                } label: {
+                  Image(systemName: "arrow.clockwise")
+                    .font(echoFont(size: 13, weight: .bold))
+                    .frame(width: 40, height: 40)
+                    .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(library.busy)
+                .accessibilityLabel(model.payload?.language == "en" ? "Refresh daily recommendations" : "刷新每日推荐")
+              }
+              ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                  ForEach(library.streaming.recommendedTracks) { track in
+                    libraryTrackGridCard(track, labels: library.labels)
+                      .frame(width: 132)
+                  }
+                }
+              }
+              .echoScrollClipDisabled()
+            }
+          }
+
         }
 
         if (searchOnly || library.source == "streaming"), !library.streaming.status.isEmpty {
           Text(library.streaming.status)
-            .font(.system(size: 11, weight: .semibold))
+            .font(echoFont(size: 11, weight: .semibold))
             .foregroundColor(echoInk.opacity(0.5))
             .frame(maxWidth: .infinity, alignment: .center)
             .multilineTextAlignment(.center)
@@ -710,13 +796,13 @@ struct EchoNativePagesScreen: View {
         HStack(spacing: 10) {
           HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
-              .font(.system(size: 15, weight: .semibold))
+              .font(echoFont(size: 15, weight: .semibold))
               .foregroundColor(echoInk.opacity(0.45))
             TextField(
               library.labels.searchPlaceholder,
               text: libraryQueryBinding(library)
             )
-            .font(.system(size: 14, weight: .medium))
+            .font(echoFont(size: 14, weight: .medium))
             .textInputAutocapitalization(.never)
             .disableAutocorrection(true)
             if !library.query.isEmpty {
@@ -724,7 +810,7 @@ struct EchoNativePagesScreen: View {
                 libraryQueryBinding(library).wrappedValue = ""
               } label: {
                 Image(systemName: "xmark.circle.fill")
-                  .font(.system(size: 17, weight: .semibold))
+                  .font(echoFont(size: 17, weight: .semibold))
                   .foregroundColor(echoInk.opacity(0.36))
                   .frame(width: 44, height: 44)
               }
@@ -741,7 +827,7 @@ struct EchoNativePagesScreen: View {
               onAction(["action": "libraryRefresh"])
             } label: {
               Image(systemName: "arrow.clockwise")
-                .font(.system(size: 16, weight: .bold))
+                .font(echoFont(size: 16, weight: .bold))
                 .rotationEffect(.degrees(library.busy ? 180 : 0))
                 .frame(width: 46, height: 46)
                 .echoGlass(tint: Color.white.opacity(0.13), clear: false, in: Circle())
@@ -784,7 +870,7 @@ struct EchoNativePagesScreen: View {
         if library.source != "streaming" {
           HStack {
             Text(library.labels.playlists)
-              .font(.system(size: 18, weight: .bold, design: .rounded))
+              .font(echoFont(size: 18, weight: .bold, design: .rounded))
             Spacer()
             EchoNativeLabelButton(symbol: "plus.circle.fill", title: library.labels.createPlaylist) {
               playlistEditor = EchoNativePlaylistEditorState(initialName: "", playlistId: nil)
@@ -796,7 +882,7 @@ struct EchoNativePagesScreen: View {
               playlistEditor = EchoNativePlaylistEditorState(initialName: "", playlistId: nil)
             } label: {
               Label(library.labels.createPlaylist, systemImage: "plus.circle.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(echoFont(size: 13, weight: .semibold))
                 .foregroundColor(echoInk.opacity(0.52))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
@@ -823,9 +909,9 @@ struct EchoNativePagesScreen: View {
               .clipShape(Circle())
             VStack(alignment: .leading, spacing: 2) {
               Text(library.labels.playlists)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(echoFont(size: 18, weight: .bold, design: .rounded))
               Text("\(library.streaming.profileName) · \(library.streaming.playlistCount)")
-                .font(.system(size: 10, weight: .semibold))
+                .font(echoFont(size: 10, weight: .semibold))
                 .foregroundColor(echoInk.opacity(0.48))
             }
             Spacer()
@@ -880,7 +966,7 @@ struct EchoNativePagesScreen: View {
         if !library.collections.isEmpty {
           HStack {
             Text(library.labels.collections)
-              .font(.system(size: 18, weight: .bold, design: .rounded))
+              .font(echoFont(size: 18, weight: .bold, design: .rounded))
             Spacer()
             librarySortMenu
             EchoNativeDisplayModeButton(mode: collectionDisplayMode, language: model.payload?.language ?? "zh") {
@@ -932,7 +1018,7 @@ struct EchoNativePagesScreen: View {
 
         HStack(spacing: 10) {
           Text(library.totalLabel)
-            .font(.system(size: 13, weight: .bold))
+            .font(echoFont(size: 13, weight: .bold))
             .foregroundColor(echoInk.opacity(0.52))
           Spacer()
           if library.source == "local" {
@@ -970,7 +1056,7 @@ struct EchoNativePagesScreen: View {
                 }
               } label: {
                 Image(systemName: "chevron.left")
-                  .font(.system(size: 13, weight: .bold))
+                  .font(echoFont(size: 13, weight: .bold))
                   .frame(width: 38, height: 38)
                   .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
               }
@@ -988,7 +1074,7 @@ struct EchoNativePagesScreen: View {
               : library.source == "streaming" && !library.streaming.selectedPlaylistName.isEmpty
                 ? library.streaming.selectedPlaylistName
                 : library.labels.songs)
-              .font(.system(size: 18, weight: .bold, design: .rounded))
+              .font(echoFont(size: 18, weight: .bold, design: .rounded))
               .lineLimit(1)
             Spacer(minLength: 8)
             if selectedCollectionIsAlbum {
@@ -1013,9 +1099,9 @@ struct EchoNativePagesScreen: View {
               ProgressView()
             } else {
               Image(systemName: "music.note.list")
-                .font(.system(size: 28, weight: .medium))
+                .font(echoFont(size: 28, weight: .medium))
               Text(library.labels.empty)
-                .font(.system(size: 14, weight: .semibold))
+                .font(echoFont(size: 14, weight: .semibold))
                 .multilineTextAlignment(.center)
             }
           }
@@ -1039,7 +1125,7 @@ struct EchoNativePagesScreen: View {
           ForEach(Array(sortedTracks.enumerated()), id: \.element.stableId) { index, track in
             if !track.group.isEmpty && (index == 0 || sortedTracks[index - 1].group != track.group) {
               Text(track.group)
-                .font(.system(size: 12, weight: .bold))
+                .font(echoFont(size: 12, weight: .bold))
                 .foregroundColor(echoAccent.opacity(0.78))
                 .padding(.top, index == 0 ? 2 : 10)
             }
@@ -1050,7 +1136,7 @@ struct EchoNativePagesScreen: View {
                 : nil
               if index == 0 || previousDiscNo != discNo {
               Text("DISC \(discNo)")
-                .font(.system(size: 12, weight: .bold))
+                .font(echoFont(size: 12, weight: .bold))
                 .foregroundColor(echoInk.opacity(0.58))
                 .padding(.top, index == 0 ? 2 : 12)
               }
@@ -1185,7 +1271,7 @@ struct EchoNativePagesScreen: View {
             selectLibraryIndexTarget(target, pagination: pagination, proxy: proxy)
           } label: {
             Text(target.key)
-              .font(.system(size: 9, weight: .bold, design: .rounded))
+              .font(echoFont(size: 9, weight: .bold, design: .rounded))
               .foregroundColor(activeLibraryIndexKey == target.key ? echoAccent : echoInk.opacity(0.56))
               .frame(width: 44, height: rowHeight)
               .contentShape(Rectangle())
@@ -1222,7 +1308,7 @@ struct EchoNativePagesScreen: View {
         if isLibraryIndexPressed, let activeLibraryIndexKey,
           let activeIndex = targets.firstIndex(where: { $0.key == activeLibraryIndexKey }) {
           Text(activeLibraryIndexKey)
-            .font(.system(size: 20, weight: .bold, design: .rounded))
+            .font(echoFont(size: 20, weight: .bold, design: .rounded))
             .foregroundColor(echoInk)
             .frame(width: 48, height: 48)
             .echoGlass(tint: Color.white.opacity(0.14), in: Circle())
@@ -1269,7 +1355,7 @@ struct EchoNativePagesScreen: View {
     ) {
       Button { selectCollection(collection) } label: {
         Image(systemName: "chevron.right")
-          .font(.system(size: 11, weight: .bold))
+          .font(echoFont(size: 11, weight: .bold))
           .foregroundColor(echoInk.opacity(0.32))
           .frame(width: 44, height: 44)
           .contentShape(Circle())
@@ -1347,7 +1433,7 @@ struct EchoNativePagesScreen: View {
       }
     } label: {
       Image(systemName: "play.fill")
-        .font(.system(size: 13, weight: .bold))
+        .font(echoFont(size: 13, weight: .bold))
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
     }
@@ -1374,7 +1460,7 @@ struct EchoNativePagesScreen: View {
       }
     } label: {
       Image(systemName: "arrow.up.arrow.down")
-        .font(.system(size: 13, weight: .bold))
+        .font(echoFont(size: 13, weight: .bold))
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
     }
@@ -1406,7 +1492,7 @@ struct EchoNativePagesScreen: View {
       }
     } label: {
       Image(systemName: "arrow.up.arrow.down")
-        .font(.system(size: 13, weight: .bold))
+        .font(echoFont(size: 13, weight: .bold))
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
     }
@@ -1438,7 +1524,7 @@ struct EchoNativePagesScreen: View {
       .opacity(pagination.page <= 1 ? 0.3 : 1)
 
       Text("\(pagination.page) / \(pagination.totalPages)")
-        .font(.system(size: 12, weight: .bold, design: .rounded))
+        .font(echoFont(size: 12, weight: .bold, design: .rounded))
         .monospacedDigit()
         .frame(minWidth: 48)
 
@@ -1458,7 +1544,7 @@ struct EchoNativePagesScreen: View {
         onAction(["action": "libraryExpand", "enabled": false])
       } label: {
         Label(model.payload?.language == "en" ? "Collapse" : "收起", systemImage: "arrow.down.right.and.arrow.up.left")
-          .font(.system(size: 12, weight: .bold))
+          .font(echoFont(size: 12, weight: .bold))
           .padding(.horizontal, 12)
           .frame(minHeight: 40)
       }
@@ -1511,7 +1597,7 @@ struct EchoNativePagesScreen: View {
             if playlist.pinned { Image(systemName: "pin.fill") }
             if playlist.favorite { Image(systemName: "heart.fill") }
           }
-          .font(.system(size: 9, weight: .bold))
+          .font(echoFont(size: 9, weight: .bold))
           .foregroundColor(.white)
           .padding(7)
           .background(Color.black.opacity(0.24), in: Capsule())
@@ -1527,11 +1613,11 @@ struct EchoNativePagesScreen: View {
         } label: {
           VStack(alignment: .leading, spacing: 2) {
             Text(playlist.name)
-              .font(.system(size: 13, weight: .bold))
+              .font(echoFont(size: 13, weight: .bold))
               .foregroundColor(echoInk)
               .lineLimit(1)
             Text(playlist.subtitle)
-              .font(.system(size: 10, weight: .semibold))
+              .font(echoFont(size: 10, weight: .semibold))
               .foregroundColor(echoInk.opacity(0.48))
           }
           .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -1568,7 +1654,7 @@ struct EchoNativePagesScreen: View {
           }
         } label: {
           Image(systemName: "ellipsis")
-            .font(.system(size: 12, weight: .bold))
+            .font(echoFont(size: 12, weight: .bold))
             .frame(width: 44, height: 44)
         }
       }
@@ -1636,7 +1722,7 @@ struct EchoNativePagesScreen: View {
     } label: {
       ZStack {
         Image(systemName: "ellipsis")
-          .font(.system(size: 14, weight: .bold))
+          .font(echoFont(size: 14, weight: .bold))
         if playlist.pinned || playlist.favorite {
           Circle()
             .fill(echoAccent)
@@ -1660,7 +1746,7 @@ struct EchoNativePagesScreen: View {
         HStack(spacing: 11) {
           if !selectedAlbumId.isEmpty, let trackNo = track.trackNo {
             Text(String(trackNo))
-              .font(.system(size: 14, weight: .semibold, design: .rounded))
+              .font(echoFont(size: 14, weight: .semibold, design: .rounded))
               .foregroundColor(echoInk.opacity(0.54))
               .frame(width: 24, alignment: .trailing)
           }
@@ -1672,24 +1758,24 @@ struct EchoNativePagesScreen: View {
 
           VStack(alignment: .leading, spacing: 4) {
             Text(track.title)
-              .font(.system(size: 15, weight: .bold))
+              .font(echoFont(size: 15, weight: .bold))
               .lineLimit(1)
             HStack(spacing: 5) {
               Text(track.artist)
                 .lineLimit(1)
               if track.hasLyrics {
                 Text("LRC")
-                  .font(.system(size: 9, weight: .bold))
+                  .font(echoFont(size: 9, weight: .bold))
               }
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
             if !track.tags.isEmpty {
               ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 5) {
                   ForEach(track.tags, id: \.self) { tag in
                     Text(tag)
-                      .font(.system(size: 9, weight: .bold))
+                      .font(echoFont(size: 9, weight: .bold))
                       .foregroundColor(echoInk.opacity(0.6))
                       .padding(.horizontal, 7)
                       .frame(height: 20)
@@ -1803,7 +1889,7 @@ struct EchoNativePagesScreen: View {
       }
     } label: {
       Image(systemName: "ellipsis")
-        .font(.system(size: 16, weight: .bold))
+        .font(echoFont(size: 16, weight: .bold))
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
     }
@@ -1849,7 +1935,7 @@ struct EchoNativePagesScreen: View {
                 : (model.payload?.language == "en" ? "Your NeteaseCloudMusicApi service" : "你的 NeteaseCloudMusicApi 服务"),
               systemImage: "network"
             )
-            .font(.system(size: 12, weight: .semibold))
+            .font(echoFont(size: 12, weight: .semibold))
             .foregroundColor(echoInk.opacity(0.56))
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1860,12 +1946,12 @@ struct EchoNativePagesScreen: View {
                   .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 4) {
                   Text(connection.streaming.profileName)
-                    .font(.system(size: 17, weight: .bold))
+                    .font(echoFont(size: 17, weight: .bold))
                     .lineLimit(1)
                   Text(model.payload?.language == "en"
                     ? "NetEase · \(connection.streaming.playlistCount) playlists"
                     : "网易云 · \(connection.streaming.playlistCount) 个歌单")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(echoFont(size: 11, weight: .semibold))
                     .foregroundColor(echoInk.opacity(0.5))
                 }
                 Spacer(minLength: 6)
@@ -1873,7 +1959,7 @@ struct EchoNativePagesScreen: View {
                   showStreamingLogoutConfirmation = true
                 } label: {
                   Text(model.payload?.language == "en" ? "Sign out" : "退出")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(echoFont(size: 12, weight: .bold))
                     .foregroundColor(echoAccent)
                     .padding(.horizontal, 13)
                     .frame(minHeight: 44)
@@ -1892,7 +1978,7 @@ struct EchoNativePagesScreen: View {
                     model.payload?.language == "en" ? "Official web sign in" : "官方网页登录",
                     systemImage: "safari"
                   )
-                  .font(.system(size: 13, weight: .bold))
+                  .font(echoFont(size: 13, weight: .bold))
                   .frame(maxWidth: .infinity)
                   .frame(height: 46)
                   .echoGlass(tint: echoAccent.opacity(0.09), clear: false, in: RoundedRectangle(cornerRadius: 15))
@@ -1910,7 +1996,7 @@ struct EchoNativePagesScreen: View {
                     Image(systemName: "qrcode")
                     Text(model.payload?.language == "en" ? "QR code sign in" : "扫码登录")
                   }
-                  .font(.system(size: 13, weight: .bold))
+                  .font(echoFont(size: 13, weight: .bold))
                   .frame(maxWidth: .infinity)
                   .frame(height: 46)
                   .echoGlass(tint: echoAccent.opacity(0.09), clear: false, in: RoundedRectangle(cornerRadius: 15))
@@ -1933,7 +2019,7 @@ struct EchoNativePagesScreen: View {
                     model.payload?.language == "en" ? "Save QR and open NetEase" : "保存二维码并打开网易云",
                     systemImage: "square.and.arrow.down"
                   )
-                  .font(.system(size: 12, weight: .bold))
+                  .font(echoFont(size: 12, weight: .bold))
                   .foregroundColor(echoInk.opacity(0.72))
                   .padding(.horizontal, 13)
                   .frame(minHeight: 44)
@@ -1945,7 +2031,7 @@ struct EchoNativePagesScreen: View {
                 Text(model.payload?.language == "en"
                   ? "In NetEase, open Scan and choose the saved QR from Photos. Return here after approval."
                   : "在网易云中打开扫一扫，从相册选择刚保存的二维码；授权后返回这里。")
-                  .font(.system(size: 10, weight: .medium))
+                  .font(echoFont(size: 10, weight: .medium))
                   .foregroundColor(echoInk.opacity(0.44))
                   .fixedSize(horizontal: false, vertical: true)
               }
@@ -1953,7 +2039,7 @@ struct EchoNativePagesScreen: View {
 
             if !connection.streaming.status.isEmpty {
               Text(connection.streaming.status)
-                .font(.system(size: 12, weight: .semibold))
+                .font(echoFont(size: 12, weight: .semibold))
                 .foregroundColor(echoInk.opacity(0.55))
                 .frame(maxWidth: .infinity, alignment: .center)
                 .multilineTextAlignment(.center)
@@ -1966,7 +2052,7 @@ struct EchoNativePagesScreen: View {
               : (connection.streaming.accessMode == "direct"
                 ? "使用官方网页登录。登录凭据仅保存在 iOS 钥匙串。"
                 : "当前通过你的 NeteaseCloudMusicApi 服务登录。登录凭据仅保存在 iOS 钥匙串。"))
-              .font(.system(size: 10, weight: .medium))
+              .font(echoFont(size: 10, weight: .medium))
               .foregroundColor(echoInk.opacity(0.42))
               .fixedSize(horizontal: false, vertical: true)
           }
@@ -2037,15 +2123,15 @@ struct EchoNativePagesScreen: View {
   private func connectionToggle(_ connection: EchoNativeConnectionPayload) -> some View {
     HStack(spacing: 14) {
       Image(systemName: "desktopcomputer")
-        .font(.system(size: 19, weight: .semibold))
+        .font(echoFont(size: 19, weight: .semibold))
         .foregroundColor(echoAccent)
         .frame(width: 42, height: 42)
         .echoGlass(tint: echoAccent.opacity(0.08), interactive: false, in: Circle())
       VStack(alignment: .leading, spacing: 3) {
         Text(connection.labels.enabled)
-          .font(.system(size: 15, weight: .bold))
+          .font(echoFont(size: 15, weight: .bold))
         Text(connection.labels.connectionDescription)
-          .font(.system(size: 11, weight: .medium))
+          .font(echoFont(size: 11, weight: .medium))
           .foregroundColor(echoInk.opacity(0.5))
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -2069,17 +2155,17 @@ struct EchoNativePagesScreen: View {
     if let remote = connection.powerampRemote {
       HStack(spacing: 14) {
         Image(systemName: "waveform.badge.magnifyingglass")
-          .font(.system(size: 19, weight: .semibold))
+          .font(echoFont(size: 19, weight: .semibold))
           .foregroundColor(echoAccent)
           .frame(width: 42, height: 42)
           .echoGlass(tint: echoAccent.opacity(0.08), interactive: false, in: Circle())
         VStack(alignment: .leading, spacing: 3) {
           Text(model.payload?.language == "en" ? "Connect Poweramp" : "连接 Poweramp")
-            .font(.system(size: 15, weight: .bold))
+            .font(echoFont(size: 15, weight: .bold))
           Text(model.payload?.language == "en"
             ? "Control Poweramp or stream Android music to this iPhone."
             : "控制 Poweramp，或将安卓音乐串流到此 iPhone。")
-            .font(.system(size: 11, weight: .medium))
+            .font(echoFont(size: 11, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -2101,7 +2187,7 @@ struct EchoNativePagesScreen: View {
         Text(model.payload?.language == "en"
           ? "Scan the pairing code shown by the Android Poweramp Remote service."
           : "扫描安卓端 Poweramp Remote 服务显示的配对二维码。")
-          .font(.system(size: 11, weight: .medium))
+          .font(echoFont(size: 11, weight: .medium))
           .foregroundColor(echoInk.opacity(0.5))
           .fixedSize(horizontal: false, vertical: true)
         EchoNativeLabelButton(symbol: "qrcode.viewfinder", title: connection.labels.scanPairing) {
@@ -2172,11 +2258,11 @@ struct EchoNativePagesScreen: View {
   private func connectionMetric(value: String, label: String) -> some View {
     VStack(spacing: 4) {
       Text(value)
-        .font(.system(size: 15, weight: .bold, design: .rounded))
+        .font(echoFont(size: 15, weight: .bold, design: .rounded))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
       Text(label)
-        .font(.system(size: 10, weight: .semibold))
+        .font(echoFont(size: 10, weight: .semibold))
         .foregroundColor(echoInk.opacity(0.45))
     }
     .frame(maxWidth: .infinity)
@@ -2189,7 +2275,7 @@ struct EchoNativePagesScreen: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 11) {
       Label(title, systemImage: symbol)
-        .font(.system(size: 14, weight: .bold))
+        .font(echoFont(size: 14, weight: .bold))
         .foregroundColor(echoInk.opacity(0.7))
       content()
     }
@@ -2259,56 +2345,68 @@ struct EchoNativePagesScreen: View {
     ScrollView(showsIndicators: false) {
       LazyVStack(alignment: .leading, spacing: 10) {
         Text(settings.subtitle)
-          .font(.system(size: 13, weight: .medium))
+          .font(echoFont(size: 13, weight: .medium))
           .foregroundColor(echoInk.opacity(0.5))
           .padding(.bottom, 4)
 
         ForEach(settings.sections) { section in
           let expanded = expandedSection == section.id
           VStack(spacing: 0) {
-            Button {
-              if reduceMotion {
-                expandedSection = expanded ? "" : section.id
-              } else {
-                withAnimation(.easeInOut(duration: 0.24)) {
+            HStack(spacing: 8) {
+              Button {
+                if reduceMotion {
                   expandedSection = expanded ? "" : section.id
+                } else {
+                  withAnimation(.easeInOut(duration: 0.24)) {
+                    expandedSection = expanded ? "" : section.id
+                  }
                 }
+              } label: {
+                HStack(spacing: 12) {
+                  Image(systemName: section.symbol)
+                    .font(echoFont(size: 17, weight: .semibold))
+                    .foregroundColor(expanded ? echoAccent : echoInk.opacity(0.58))
+                    .frame(width: 38, height: 38)
+                    .echoGlass(
+                      tint: expanded ? echoAccent.opacity(0.08) : Color.white.opacity(0.08),
+                      clear: !expanded,
+                      in: Circle()
+                    )
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text(section.title)
+                      .font(echoFont(size: 15, weight: .bold))
+                    Text(section.description)
+                      .font(echoFont(size: 11, weight: .medium))
+                      .foregroundColor(echoInk.opacity(0.48))
+                      .lineLimit(expanded ? 2 : 1)
+                  }
+                  Spacer(minLength: 6)
+                  Image(systemName: "chevron.down")
+                    .font(echoFont(size: 12, weight: .bold))
+                    .foregroundColor(echoInk.opacity(0.38))
+                    .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity, alignment: .leading)
               }
-            } label: {
-              HStack(spacing: 12) {
-                Image(systemName: section.symbol)
-                  .font(.system(size: 17, weight: .semibold))
-                  .foregroundColor(expanded ? echoAccent : echoInk.opacity(0.58))
-                  .frame(width: 38, height: 38)
-                  .echoGlass(
-                    tint: expanded ? echoAccent.opacity(0.08) : Color.white.opacity(0.08),
-                    clear: !expanded,
-                    in: Circle()
-                  )
-                VStack(alignment: .leading, spacing: 3) {
-                  Text(section.title)
-                    .font(.system(size: 15, weight: .bold))
-                  Text(section.description)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(echoInk.opacity(0.48))
-                    .lineLimit(expanded ? 2 : 1)
+              .buttonStyle(.plain)
+
+              if section.resettable {
+                Button {
+                  onAction(["action": "settingResetSection", "section": section.id])
+                } label: {
+                  Image(systemName: "arrow.counterclockwise")
+                    .font(echoFont(size: 12, weight: .bold))
+                    .foregroundColor(echoInk.opacity(0.5))
+                    .frame(width: 34, height: 38)
+                    .contentShape(Circle())
                 }
-                Spacer(minLength: 8)
-                if !expanded {
-                  Text(section.summary)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(echoInk.opacity(0.42))
-                    .lineLimit(1)
-                }
-                Image(systemName: "chevron.down")
-                  .font(.system(size: 12, weight: .bold))
-                  .foregroundColor(echoInk.opacity(0.38))
-                  .rotationEffect(.degrees(expanded ? 180 : 0))
+                .buttonStyle(.plain)
+                .help(model.payload?.language == "en" ? "Restore this section" : "恢复本栏默认设置")
+                .accessibilityLabel(model.payload?.language == "en" ? "Restore this section" : "恢复本栏默认设置")
               }
-              .contentShape(Rectangle())
-              .padding(.vertical, 11)
             }
-            .buttonStyle(.plain)
 
             if expanded {
               VStack(spacing: 0) {
@@ -2343,7 +2441,7 @@ struct EchoNativePagesScreen: View {
     switch row.kind {
     case "toggle":
       HStack(spacing: 12) {
-        settingText(row)
+        settingHeader(row)
         Spacer(minLength: 8)
         Toggle("", isOn: Binding(
           get: { currentSettingRow(row.id)?.boolValue ?? row.boolValue ?? false },
@@ -2360,7 +2458,7 @@ struct EchoNativePagesScreen: View {
       .opacity(row.disabled ? 0.42 : 1)
     case "picker":
       VStack(alignment: .leading, spacing: 10) {
-        settingText(row)
+        settingHeader(row)
         ScrollView(.horizontal, showsIndicators: false) {
           EchoNativeSegmentedControl(
             options: row.options,
@@ -2382,7 +2480,7 @@ struct EchoNativePagesScreen: View {
       let step = row.stepValue ?? 0.01
       let current = currentSettingRow(row.id)?.numberValue ?? row.numberValue ?? minimum
       VStack(alignment: .leading, spacing: 9) {
-        settingText(row)
+        settingHeader(row)
         Slider(
           value: Binding(
             get: { currentSettingRow(row.id)?.numberValue ?? row.numberValue ?? minimum },
@@ -2400,33 +2498,97 @@ struct EchoNativePagesScreen: View {
           }
         )
         Text(sliderValueLabel(row.id, value: currentSettingRow(row.id)?.numberValue ?? current))
-          .font(.system(size: 11, weight: .bold, design: .rounded))
+          .font(echoFont(size: 11, weight: .bold, design: .rounded))
           .foregroundColor(echoAccent)
           .frame(maxWidth: .infinity, alignment: .trailing)
       }
       .padding(.vertical, 12)
       .disabled(row.disabled)
       .opacity(row.disabled ? 0.42 : 1)
+    case "color":
+      VStack(alignment: .leading, spacing: 10) {
+        settingHeader(row)
+        HStack(spacing: 8) {
+          ForEach(row.options) { option in
+            let selected = (currentSettingRow(row.id)?.selection ?? row.selection) == option.id
+            Button {
+              updateSettingRow(row.id) { $0.selection = option.id }
+              onAction(["action": "settingSelect", "key": row.id, "selection": option.id])
+            } label: {
+              Circle()
+                .fill(echoColor(hex: option.id))
+                .frame(width: 30, height: 30)
+                .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 1))
+                .overlay(Circle().stroke(echoInk.opacity(selected ? 0.42 : 0.16), lineWidth: 1))
+                .scaleEffect(selected ? 1 : 0.88)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(option.label)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+          }
+          ColorPicker(
+            "",
+            selection: Binding(
+              get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24") },
+              set: { color in
+                guard let selection = echoHex(color: color) else { return }
+                updateSettingRow(row.id) { $0.selection = selection }
+                onAction(["action": "settingSelect", "key": row.id, "selection": selection])
+              }
+            ),
+            supportsOpacity: false
+          )
+          .labelsHidden()
+          .frame(width: 32, height: 32)
+          .accessibilityLabel(model.payload?.language == "en" ? "Custom theme color" : "自定义主题色")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .padding(.vertical, 12)
+    case "font":
+      HStack(spacing: 12) {
+        settingHeader(row)
+        Spacer(minLength: 8)
+        Button {
+          showAppearanceFontImporter = true
+        } label: {
+          HStack(spacing: 6) {
+            Text(row.value)
+              .font(echoFont(size: 11, weight: .bold))
+              .lineLimit(1)
+            Image(systemName: "doc.badge.plus")
+          }
+          .foregroundColor(echoAccent)
+          .frame(minHeight: 40)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(.vertical, 12)
     case "eq":
-      Button {
-        showEqualizer = true
-      } label: {
-        HStack(spacing: 12) {
-          settingText(row)
-          Spacer(minLength: 8)
+      HStack(spacing: 12) {
+        settingHeader(row)
+        Spacer(minLength: 8)
+        Button {
+          showEqualizer = true
+        } label: {
+          HStack(spacing: 7) {
           Text(row.value)
-            .font(.system(size: 11, weight: .bold))
+            .font(echoFont(size: 11, weight: .bold))
             .foregroundColor(echoAccent)
           Image(systemName: "slider.vertical.3")
-            .font(.system(size: 14, weight: .bold))
+            .font(echoFont(size: 14, weight: .bold))
+          }
+          .frame(minHeight: 40)
         }
-        .padding(.vertical, 12)
+        .buttonStyle(.plain)
       }
-      .buttonStyle(.plain)
+      .padding(.vertical, 12)
     case "action":
       Button {
         if row.id == "desktopLyricsImportBackground" {
           showDesktopLyricsBackgroundPicker = true
+        } else if row.id == "appearanceImportBackground" {
+          showAppearanceBackgroundPicker = true
         } else {
           onAction(["action": "settingAction", "key": row.id])
         }
@@ -2435,7 +2597,7 @@ struct EchoNativePagesScreen: View {
           settingText(row)
           Spacer(minLength: 8)
           Image(systemName: "chevron.right")
-            .font(.system(size: 12, weight: .bold))
+            .font(echoFont(size: 12, weight: .bold))
             .foregroundColor(echoInk.opacity(0.38))
         }
         .padding(.vertical, 12)
@@ -2448,7 +2610,7 @@ struct EchoNativePagesScreen: View {
         settingText(row)
         Spacer(minLength: 8)
         Text(row.value)
-          .font(.system(size: 12, weight: .bold))
+          .font(echoFont(size: 12, weight: .bold))
           .foregroundColor(echoInk.opacity(0.52))
       }
       .padding(.vertical, 12)
@@ -2458,18 +2620,22 @@ struct EchoNativePagesScreen: View {
   private func settingText(_ row: EchoNativeSettingRow) -> some View {
     VStack(alignment: .leading, spacing: 3) {
       Text(row.title)
-        .font(.system(size: 14, weight: .bold))
+        .font(echoFont(size: 14, weight: .bold))
       if !row.description.isEmpty {
         Text(row.description)
-          .font(.system(size: 10.5, weight: .medium))
+          .font(echoFont(size: 10.5, weight: .medium))
           .foregroundColor(echoInk.opacity(0.48))
           .fixedSize(horizontal: false, vertical: true)
       }
     }
   }
 
+  private func settingHeader(_ row: EchoNativeSettingRow) -> some View {
+    settingText(row)
+  }
+
   private func sliderValueLabel(_ id: String, value: Double) -> String {
-    id == "desktopLyricsWidth" || id == "desktopLyricsHeight"
+    id == "desktopLyricsWidth" || id == "desktopLyricsHeight" || id == "fontScale"
       ? "\(Int((value * 100).rounded()))%"
       : "\(Int(value.rounded())) pt"
   }
@@ -2534,7 +2700,7 @@ private struct EchoNativePlaylistEditorSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
       Text(editorTitle)
-        .font(.system(size: 24, weight: .bold, design: .rounded))
+        .font(echoFont(size: 24, weight: .bold, design: .rounded))
       TextField(labels?.playlistName ?? "歌单名称", text: $name)
         .textFieldStyle(.plain)
         .padding(.horizontal, 14)
@@ -2618,9 +2784,9 @@ private struct EchoNativePlaylistDetailSheet: View {
       HStack {
         VStack(alignment: .leading, spacing: 3) {
           Text(playlist?.name ?? "")
-            .font(.system(size: 24, weight: .bold, design: .rounded))
+            .font(echoFont(size: 24, weight: .bold, design: .rounded))
           Text(playlist?.subtitle ?? "")
-            .font(.system(size: 12, weight: .semibold))
+            .font(echoFont(size: 12, weight: .semibold))
             .foregroundColor(echoInk.opacity(0.5))
         }
         Spacer()
@@ -2649,7 +2815,7 @@ private struct EchoNativePlaylistDetailSheet: View {
             }
           } label: {
             Image(systemName: "ellipsis")
-              .font(.system(size: 13, weight: .bold))
+              .font(echoFont(size: 13, weight: .bold))
               .frame(width: 44, height: 44)
               .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
           }
@@ -2660,7 +2826,7 @@ private struct EchoNativePlaylistDetailSheet: View {
           dismiss()
         } label: {
           Image(systemName: "xmark")
-            .font(.system(size: 13, weight: .bold))
+            .font(echoFont(size: 13, weight: .bold))
             .frame(width: 44, height: 44)
             .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
         }
@@ -2688,10 +2854,10 @@ private struct EchoNativePlaylistDetailSheet: View {
                       .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     VStack(alignment: .leading, spacing: 3) {
                       Text(track.title)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(echoFont(size: 14, weight: .bold))
                         .lineLimit(1)
                       Text(track.artist)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(echoFont(size: 11, weight: .medium))
                         .foregroundColor(echoInk.opacity(0.48))
                         .lineLimit(1)
                     }
@@ -2715,7 +2881,7 @@ private struct EchoNativePlaylistDetailSheet: View {
                   }
                 } label: {
                   Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(echoFont(size: 14, weight: .bold))
                     .frame(width: 44, height: 44)
                 }
               }
@@ -2729,9 +2895,9 @@ private struct EchoNativePlaylistDetailSheet: View {
       } else {
         VStack(spacing: 12) {
           Image(systemName: "music.note.list")
-            .font(.system(size: 28, weight: .medium))
+            .font(echoFont(size: 28, weight: .medium))
           Text(model.payload?.language == "en" ? "Add songs from the library." : "从曲库中选择歌曲加入歌单。")
-            .font(.system(size: 13, weight: .semibold))
+            .font(echoFont(size: 13, weight: .semibold))
         }
         .foregroundColor(echoInk.opacity(0.42))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2768,9 +2934,9 @@ private struct EchoPairingScannerSheet: View {
         HStack {
           VStack(alignment: .leading, spacing: 3) {
             Text(language == "en" ? "Scan Pairing Code" : "扫描配对二维码")
-              .font(.system(size: 22, weight: .bold, design: .rounded))
+              .font(echoFont(size: 22, weight: .bold, design: .rounded))
             Text(language == "en" ? "Point the camera at the QR code shown by \(serviceName)." : "将 \(serviceName) 显示的二维码放入取景框。")
-              .font(.system(size: 11, weight: .semibold))
+              .font(echoFont(size: 11, weight: .semibold))
               .foregroundColor(.white.opacity(0.7))
           }
           Spacer()
@@ -2778,7 +2944,7 @@ private struct EchoPairingScannerSheet: View {
             dismiss()
           } label: {
             Image(systemName: "xmark")
-              .font(.system(size: 13, weight: .bold))
+              .font(echoFont(size: 13, weight: .bold))
               .frame(width: 44, height: 44)
               .echoGlass(tint: Color.black.opacity(0.14), in: Circle())
           }
@@ -2803,7 +2969,7 @@ private struct EchoPairingScannerSheet: View {
             showPhotoPicker = true
           } label: {
             Label(language == "en" ? "Choose from Photos" : "从相册选择", systemImage: "photo")
-              .font(.system(size: 13, weight: .bold))
+              .font(echoFont(size: 13, weight: .bold))
               .padding(.horizontal, 18)
               .frame(height: 42)
               .echoGlass(tint: Color.white.opacity(0.12), clear: false, in: Capsule())
@@ -2811,7 +2977,7 @@ private struct EchoPairingScannerSheet: View {
           .buttonStyle(.plain)
 
           Text(language == "en" ? "The \(serviceName) connection is saved after a successful scan." : "识别成功后会自动保存 \(serviceName) 连接信息。")
-            .font(.system(size: 12, weight: .semibold))
+            .font(echoFont(size: 12, weight: .semibold))
             .foregroundColor(.white.opacity(0.76))
             .multilineTextAlignment(.center)
         }
@@ -2823,18 +2989,18 @@ private struct EchoPairingScannerSheet: View {
         Color.black.opacity(0.88).ignoresSafeArea()
         VStack(spacing: 14) {
           Image(systemName: "camera.fill")
-            .font(.system(size: 30, weight: .medium))
+            .font(echoFont(size: 30, weight: .medium))
           Text(language == "en" ? "Camera access is required" : "需要相机权限")
-            .font(.system(size: 20, weight: .bold))
+            .font(echoFont(size: 20, weight: .bold))
           Text(language == "en" ? "Enable Camera for ECHO iPhone in Settings, then scan again." : "请在系统设置中允许 ECHO iPhone 使用相机，然后重新扫码。")
-            .font(.system(size: 12, weight: .medium))
+            .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(.white.opacity(0.68))
             .multilineTextAlignment(.center)
           Button(language == "en" ? "Open Settings" : "打开设置") {
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
             UIApplication.shared.open(url)
           }
-          .font(.system(size: 13, weight: .bold))
+          .font(echoFont(size: 13, weight: .bold))
           .padding(.horizontal, 18)
           .frame(height: 42)
           .echoGlass(tint: Color.white.opacity(0.12), clear: false, in: Capsule())
@@ -2842,7 +3008,7 @@ private struct EchoPairingScannerSheet: View {
             showPhotoPicker = true
           } label: {
             Label(language == "en" ? "Choose from Photos" : "从相册选择", systemImage: "photo")
-              .font(.system(size: 13, weight: .bold))
+              .font(echoFont(size: 13, weight: .bold))
               .padding(.horizontal, 18)
               .frame(height: 42)
               .echoGlass(tint: Color.white.opacity(0.12), clear: false, in: Capsule())
@@ -2966,7 +3132,7 @@ private struct EchoNativeQRCode: View {
           .scaledToFit()
       } else {
         Image(systemName: "qrcode")
-          .font(.system(size: 48, weight: .medium))
+          .font(echoFont(size: 48, weight: .medium))
           .foregroundColor(echoInk.opacity(0.35))
       }
     }
@@ -3145,7 +3311,7 @@ private struct EchoNativeMediaGridCard<Accessory: View>: View {
       Button(action: onSelect) {
         VStack(alignment: .leading, spacing: 4) {
           Text(title)
-            .font(.system(size: 14, weight: .bold))
+            .font(echoFont(size: 14, weight: .bold))
             .foregroundColor(echoInk)
             .lineLimit(1)
           HStack(spacing: 5) {
@@ -3153,7 +3319,7 @@ private struct EchoNativeMediaGridCard<Accessory: View>: View {
             Spacer(minLength: 2)
             ForEach(badges, id: \.self) { Image(systemName: $0) }
           }
-          .font(.system(size: 11, weight: .semibold))
+          .font(echoFont(size: 11, weight: .semibold))
           .foregroundColor(echoInk.opacity(0.48))
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
@@ -3197,14 +3363,14 @@ private struct EchoNativeMediaRow<Accessory: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
           VStack(alignment: .leading, spacing: 4) {
             Text(title)
-              .font(.system(size: 15, weight: .bold))
+              .font(echoFont(size: 15, weight: .bold))
               .foregroundColor(echoInk)
               .lineLimit(1)
             HStack(spacing: 5) {
               Text(subtitle).lineLimit(1)
               ForEach(badges, id: \.self) { Image(systemName: $0) }
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(echoFont(size: 11, weight: .semibold))
             .foregroundColor(echoInk.opacity(0.48))
           }
           Spacer(minLength: 0)
@@ -3236,7 +3402,7 @@ private struct EchoNativeDisplayModeButton: View {
       }
     } label: {
       Image(systemName: mode == "grid" ? "list.bullet" : "square.grid.2x2")
-        .font(.system(size: 14, weight: .bold))
+        .font(echoFont(size: 14, weight: .bold))
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
         .contentShape(Circle())
@@ -3262,7 +3428,7 @@ private struct EchoNativeSegmentedControl: View {
             onSelect(option.id)
           } label: {
             Text(option.label)
-              .font(.system(size: compact ? 11 : 12, weight: .bold))
+              .font(echoFont(size: compact ? 11 : 12, weight: .bold))
               .foregroundColor(selected ? echoAccent : echoInk.opacity(0.54))
               .lineLimit(1)
               .minimumScaleFactor(0.72)
@@ -3292,9 +3458,9 @@ private struct EchoNativeLabelButton: View {
     Button(action: action) {
       HStack(spacing: 6) {
         Image(systemName: symbol)
-          .font(.system(size: 13, weight: .bold))
+          .font(echoFont(size: 13, weight: .bold))
         Text(title)
-          .font(.system(size: 11, weight: .bold))
+          .font(echoFont(size: 11, weight: .bold))
           .lineLimit(1)
       }
       .foregroundColor(echoInk.opacity(disabled ? 0.34 : 0.72))
@@ -3322,7 +3488,7 @@ private struct EchoNativeTextField: View {
           .keyboardType(keyboardType)
       }
     }
-    .font(.system(size: 13, weight: .medium))
+    .font(echoFont(size: 13, weight: .medium))
     .textInputAutocapitalization(.never)
     .disableAutocorrection(true)
     .padding(.horizontal, 14)

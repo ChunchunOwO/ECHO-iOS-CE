@@ -27,6 +27,10 @@ struct EchoNativeCoreTrack: Codable, Hashable, Identifiable, Sendable {
   var codec: String?
   var discNo: Int?
   var durationMs: Double
+  var externalArtist: String?
+  var externalArtworkUrl: String?
+  var externalLyrics: String?
+  var externalLyricsUrl: String?
   var fileName: String?
   var fileSize: Int64
   var hasLyrics: Bool
@@ -50,6 +54,10 @@ struct EchoNativeCoreTrack: Codable, Hashable, Identifiable, Sendable {
     codec: String? = nil,
     discNo: Int? = nil,
     durationMs: Double = 0,
+    externalArtist: String? = nil,
+    externalArtworkUrl: String? = nil,
+    externalLyrics: String? = nil,
+    externalLyricsUrl: String? = nil,
     fileName: String? = nil,
     fileSize: Int64 = 0,
     hasLyrics: Bool = false,
@@ -72,6 +80,10 @@ struct EchoNativeCoreTrack: Codable, Hashable, Identifiable, Sendable {
     self.codec = codec
     self.discNo = discNo
     self.durationMs = durationMs
+    self.externalArtist = externalArtist
+    self.externalArtworkUrl = externalArtworkUrl
+    self.externalLyrics = externalLyrics
+    self.externalLyricsUrl = externalLyricsUrl
     self.fileName = fileName
     self.fileSize = fileSize
     self.hasLyrics = hasLyrics
@@ -102,6 +114,10 @@ struct EchoNativeCoreTrack: Codable, Hashable, Identifiable, Sendable {
     codec = try values.decodeIfPresent(String.self, forKey: .codec)
     discNo = try values.decodeIfPresent(Int.self, forKey: .discNo)
     durationMs = try values.decodeIfPresent(Double.self, forKey: .durationMs) ?? 0
+    externalArtist = try values.decodeIfPresent(String.self, forKey: .externalArtist)
+    externalArtworkUrl = try values.decodeIfPresent(String.self, forKey: .externalArtworkUrl)
+    externalLyrics = try values.decodeIfPresent(String.self, forKey: .externalLyrics)
+    externalLyricsUrl = try values.decodeIfPresent(String.self, forKey: .externalLyricsUrl)
     fileName = try values.decodeIfPresent(String.self, forKey: .fileName)
     fileSize = try values.decodeIfPresent(Int64.self, forKey: .fileSize) ?? 0
     hasLyrics = try values.decodeIfPresent(Bool.self, forKey: .hasLyrics) ?? false
@@ -196,6 +212,7 @@ enum EchoNativePlaybackMode: String, Codable, Sendable {
 }
 
 struct EchoNativeCoreSettings: Codable, Sendable {
+  var appearanceBackground = "theme"
   var artworkBackgroundEnabled = true
   var autoOpenLyricsForLocalTracks = true
   var autoQueueImportedLocalTracks = false
@@ -210,6 +227,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     "streamable": true,
   ]
   var darkModeEnabled = false
+  var customFontName = ""
   var desktopLyricsAnimation = "flow"
   var desktopLyricsBackground = "theme"
   var desktopLyricsEnabled = false
@@ -222,6 +240,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var desktopLyricsSize = "medium"
   var desktopLyricsTimedReveal = false
   var desktopLyricsTransitionAnimation = false
+  var desktopLyricsVisualizer = "off"
   var desktopLyricsWidthScale = 1.0
   var defaultLibrarySource = "local"
   var defaultLocalLibraryView = "songs"
@@ -232,10 +251,13 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var externalMetadataEnabled = false
   var externalMetadataSkipExisting = true
   var followSystemAppearance = true
+  var fontScale = 1.0
+  var hapticsEnabled = true
   var language = "zh"
   var lrcApiExternalDataEnabled = false
   var lrclibExternalDataEnabled = true
   var loudnessEnabled = false
+  var motionStyle = "subtle"
   var neteaseAccessMode = "direct"
   var neteaseApiBaseUrl = "https://music.163.com"
   var neteaseExternalDataEnabled = true
@@ -244,6 +266,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var showArtworkGlow = true
   var showPlayerOutputInMenu = true
   var showPowerampRemote = false
+  var themeColorHex = "AC1F24"
 
   private enum LegacyCodingKeys: String, CodingKey {
     case repeatOne
@@ -254,6 +277,8 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
+    let decodedBackground = try values.decodeIfPresent(String.self, forKey: .appearanceBackground) ?? "theme"
+    appearanceBackground = ["artwork", "custom", "theme"].contains(decodedBackground) ? decodedBackground : "theme"
     artworkBackgroundEnabled = try values.decodeIfPresent(Bool.self, forKey: .artworkBackgroundEnabled) ?? true
     autoOpenLyricsForLocalTracks = try values.decodeIfPresent(Bool.self, forKey: .autoOpenLyricsForLocalTracks) ?? true
     autoQueueImportedLocalTracks = try values.decodeIfPresent(Bool.self, forKey: .autoQueueImportedLocalTracks) ?? false
@@ -268,6 +293,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
       "streamable": true,
     ]
     darkModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .darkModeEnabled) ?? false
+    customFontName = try values.decodeIfPresent(String.self, forKey: .customFontName) ?? ""
     desktopLyricsAnimation = try values.decodeIfPresent(String.self, forKey: .desktopLyricsAnimation) ?? "flow"
     desktopLyricsBackground = try values.decodeIfPresent(String.self, forKey: .desktopLyricsBackground) ?? "theme"
     desktopLyricsEnabled = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsEnabled) ?? false
@@ -284,8 +310,10 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     desktopLyricsFontSize = max(18, min(48, decodedFontSize))
     desktopLyricsTimedReveal = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTimedReveal) ?? false
     desktopLyricsTransitionAnimation = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsTransitionAnimation) ?? false
+    let decodedVisualizer = try values.decodeIfPresent(String.self, forKey: .desktopLyricsVisualizer) ?? "off"
+    desktopLyricsVisualizer = ["off", "bars", "wave", "pulse"].contains(decodedVisualizer) ? decodedVisualizer : "off"
     let decodedWidthScale = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsWidthScale)
-    desktopLyricsWidthScale = max(0.2, min(1.0, decodedHeightScale == nil ? 1.0 : decodedWidthScale ?? 1.0))
+    desktopLyricsWidthScale = max(0.2, min(1.0, decodedWidthScale ?? 1.0))
     defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "local"
     defaultLocalLibraryView = try values.decodeIfPresent(String.self, forKey: .defaultLocalLibraryView) ?? "songs"
     defaultPage = try values.decodeIfPresent(String.self, forKey: .defaultPage) ?? "control"
@@ -295,10 +323,14 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     externalMetadataEnabled = try values.decodeIfPresent(Bool.self, forKey: .externalMetadataEnabled) ?? false
     externalMetadataSkipExisting = try values.decodeIfPresent(Bool.self, forKey: .externalMetadataSkipExisting) ?? true
     followSystemAppearance = try values.decodeIfPresent(Bool.self, forKey: .followSystemAppearance) ?? true
+    fontScale = max(0.85, min(1.25, try values.decodeIfPresent(Double.self, forKey: .fontScale) ?? 1))
+    hapticsEnabled = try values.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
     language = try values.decodeIfPresent(String.self, forKey: .language) ?? "zh"
     lrcApiExternalDataEnabled = try values.decodeIfPresent(Bool.self, forKey: .lrcApiExternalDataEnabled) ?? false
     lrclibExternalDataEnabled = try values.decodeIfPresent(Bool.self, forKey: .lrclibExternalDataEnabled) ?? true
     loudnessEnabled = try values.decodeIfPresent(Bool.self, forKey: .loudnessEnabled) ?? false
+    let decodedMotionStyle = try values.decodeIfPresent(String.self, forKey: .motionStyle) ?? "subtle"
+    motionStyle = ["off", "subtle", "fluid"].contains(decodedMotionStyle) ? decodedMotionStyle : "subtle"
     neteaseAccessMode = try values.decodeIfPresent(String.self, forKey: .neteaseAccessMode) ?? "direct"
     neteaseApiBaseUrl = try values.decodeIfPresent(String.self, forKey: .neteaseApiBaseUrl) ?? "https://music.163.com"
     neteaseExternalDataEnabled = try values.decodeIfPresent(Bool.self, forKey: .neteaseExternalDataEnabled) ?? true
@@ -310,6 +342,10 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     showArtworkGlow = try values.decodeIfPresent(Bool.self, forKey: .showArtworkGlow) ?? true
     showPlayerOutputInMenu = try values.decodeIfPresent(Bool.self, forKey: .showPlayerOutputInMenu) ?? true
     showPowerampRemote = try values.decodeIfPresent(Bool.self, forKey: .showPowerampRemote) ?? false
+    let decodedThemeColor = try values.decodeIfPresent(String.self, forKey: .themeColorHex) ?? "AC1F24"
+    themeColorHex = decodedThemeColor.range(of: #"^[0-9A-Fa-f]{6}$"#, options: .regularExpression) == nil
+      ? "AC1F24"
+      : decodedThemeColor.uppercased()
   }
 }
 
@@ -325,6 +361,8 @@ struct EchoNativePersistentState: Codable, Sendable {
   var streamingFavoritePlaylistIds: Set<String> = []
   var streamingPinnedPlaylistIds: Set<String> = []
   var streamingQueueTracks: [EchoNativeCoreTrack] = []
+  var streamingRecommendationDate = ""
+  var streamingRecommendedTracks: [EchoNativeCoreTrack] = []
 
   init() {}
 
@@ -341,6 +379,8 @@ struct EchoNativePersistentState: Codable, Sendable {
     streamingFavoritePlaylistIds = try values.decodeIfPresent(Set<String>.self, forKey: .streamingFavoritePlaylistIds) ?? []
     streamingPinnedPlaylistIds = try values.decodeIfPresent(Set<String>.self, forKey: .streamingPinnedPlaylistIds) ?? []
     streamingQueueTracks = try values.decodeIfPresent([EchoNativeCoreTrack].self, forKey: .streamingQueueTracks) ?? []
+    streamingRecommendationDate = try values.decodeIfPresent(String.self, forKey: .streamingRecommendationDate) ?? ""
+    streamingRecommendedTracks = try values.decodeIfPresent([EchoNativeCoreTrack].self, forKey: .streamingRecommendedTracks) ?? []
   }
 }
 
