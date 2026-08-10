@@ -603,7 +603,17 @@ private struct EchoNativeAppScreen: View {
     @ViewBuilder content: () -> Content
   ) -> some View {
     ZStack {
-      if playerModel.appearanceBackground == "artwork" {
+      if playerBackground {
+        EchoNativeArtworkBackdrop(
+          enabled: true,
+          identity: "\(playerModel.title)::\(playerModel.artist)",
+          urlString: playerModel.artworkUrl
+        ) {
+          onAction(["action": "artworkError", "url": playerModel.artworkUrl])
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+      } else if playerModel.appearanceBackground == "artwork" {
         EchoNativeArtworkBackdrop(
           enabled: true,
           identity: "\(playerModel.title)::\(playerModel.artist)",
