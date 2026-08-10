@@ -407,7 +407,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.scaleBy(x: 1, y: -1)
     let textPanel = CGRect(x: text.minX, y: CGFloat(height) - text.maxY, width: text.width, height: text.height)
     let currentText = currentLyric.isEmpty
-      ? (configuration.language == "en" ? "No lyric data" : "??????")
+      ? (configuration.language == "en" ? "No lyric data" : "暂无歌曲数据")
       : currentLyric
     let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  /  ")
     let metadataFont = displayFont(size: min(24, max(14, coverSize * 0.11)), weight: .semibold)
@@ -545,7 +545,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.scaleBy(x: 1, y: -1)
     let font = displayFont(size: min(30, max(20, bounds.height * 0.12)), weight: .bold)
     drawCenteredText(
-      configuration.language == "en" ? "No song is playing" : "????????",
+      configuration.language == "en" ? "No song is playing" : "没有歌曲正在播放",
       in: bounds.insetBy(dx: max(24, bounds.width * 0.08), dy: 0),
       font: font,
       color: .white.withAlphaComponent(0.9),

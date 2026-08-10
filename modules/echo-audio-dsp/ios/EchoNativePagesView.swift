@@ -534,65 +534,65 @@ struct EchoNativePagesScreen: View {
       }
     }
     .confirmationDialog(
-      model.payload?.language == "en" ? "Delete this playlist?" : "???????",
+      model.payload?.language == "en" ? "Delete this playlist?" : "删除这个歌单？",
       isPresented: Binding(
         get: { playlistPendingDeletion != nil },
         set: { if !$0 { playlistPendingDeletion = nil } }
       ),
       titleVisibility: .visible
     ) {
-      Button(model.payload?.library?.labels.deletePlaylist ?? "????", role: .destructive) {
+      Button(model.payload?.library?.labels.deletePlaylist ?? "删除歌单", role: .destructive) {
         if let playlist = playlistPendingDeletion {
           onAction(["action": "playlistDelete", "playlistId": playlist.id])
         }
         playlistPendingDeletion = nil
       }
-      Button(model.payload?.library?.labels.cancel ?? "??", role: .cancel) {}
+      Button(model.payload?.library?.labels.cancel ?? "取消", role: .cancel) {}
     } message: {
       Text(playlistPendingDeletion?.name ?? "")
     }
     .confirmationDialog(
-      model.payload?.language == "en" ? "Delete this local file?" : "?????????",
+      model.payload?.language == "en" ? "Delete this local file?" : "删除这个本地文件？",
       isPresented: Binding(
         get: { trackPendingDeletion != nil },
         set: { if !$0 { trackPendingDeletion = nil } }
       ),
       titleVisibility: .visible
     ) {
-      Button(model.payload?.library?.labels.deleteTrack ?? "????", role: .destructive) {
+      Button(model.payload?.library?.labels.deleteTrack ?? "删除歌曲", role: .destructive) {
         if let track = trackPendingDeletion { onAction(["action": "trackDelete", "id": track.id]) }
         trackPendingDeletion = nil
       }
-      Button(model.payload?.library?.labels.cancel ?? "??", role: .cancel) {}
+      Button(model.payload?.library?.labels.cancel ?? "取消", role: .cancel) {}
     } message: {
       Text(trackPendingDeletion?.title ?? "")
     }
     .alert(
-      model.payload?.language == "en" ? "Sign out of NetEase Cloud Music?" : "????????",
+      model.payload?.language == "en" ? "Sign out of NetEase Cloud Music?" : "退出网易云音乐？",
       isPresented: $showStreamingLogoutConfirmation
     ) {
-      Button(model.payload?.language == "en" ? "Sign out" : "??", role: .destructive) {
+      Button(model.payload?.language == "en" ? "Sign out" : "退出", role: .destructive) {
         onAction(["action": "streamingLogout"])
       }
-      Button(model.payload?.language == "en" ? "Cancel" : "??", role: .cancel) {}
+      Button(model.payload?.language == "en" ? "Cancel" : "取消", role: .cancel) {}
     } message: {
-      Text(model.payload?.language == "en" ? "You will need to scan the QR code again to sign in." : "??????????????")
+      Text(model.payload?.language == "en" ? "You will need to scan the QR code again to sign in." : "下次登录需要重新扫描二维码。")
     }
     .alert(
-      model.payload?.language == "en" ? "Could not save QR code" : "???????",
+      model.payload?.language == "en" ? "Could not save QR code" : "无法保存二维码",
       isPresented: $showNeteaseQrSaveError
     ) {
-      Button(model.payload?.language == "en" ? "OK" : "?", role: .cancel) {}
+      Button(model.payload?.language == "en" ? "OK" : "好", role: .cancel) {}
     } message: {
       Text(model.payload?.language == "en"
         ? "Allow photo access, then try again."
-        : "?????????????")
+        : "请允许添加照片权限后重试。")
     }
     .alert(
-      model.payload?.language == "en" ? "Could not import image" : "??????",
+      model.payload?.language == "en" ? "Could not import image" : "无法导入图片",
       isPresented: $desktopLyricsBackgroundImportFailed
     ) {
-      Button(model.payload?.language == "en" ? "OK" : "?", role: .cancel) {}
+      Button(model.payload?.language == "en" ? "OK" : "好", role: .cancel) {}
     }
     .onChange(of: scenePhase) { phase in
       if phase == .active, !(model.payload?.connection?.streaming.qrUrl ?? "").isEmpty {
@@ -644,10 +644,10 @@ struct EchoNativePagesScreen: View {
   private func pageTitle(_ language: String) -> String {
     let english = language == "en"
     switch page {
-    case "library": return english ? "Library" : "??"
-    case "search": return english ? "Search" : "??"
-    case "connect": return english ? "Connect" : "??"
-    default: return english ? "Settings" : "??"
+    case "library": return english ? "Library" : "曲库"
+    case "search": return english ? "Search" : "搜索"
+    case "connect": return english ? "Connect" : "连接"
+    default: return english ? "Settings" : "设置"
     }
   }
 
@@ -700,10 +700,10 @@ struct EchoNativePagesScreen: View {
     let paginationExpansionLabel = !selectedAlbumId.isEmpty && selectedCollectionIsAlbum
       ? (model.payload?.language == "en"
         ? "Show all \(library.pagination.totalCount) album tracks"
-        : "??????? \(library.pagination.totalCount) ?")
+        : "展开专辑内全部 \(library.pagination.totalCount) 首")
       : (model.payload?.language == "en"
         ? "Browse all \(library.pagination.totalCount) items"
-        : "???? \(library.pagination.totalCount) ??????")
+        : "展开全部 \(library.pagination.totalCount) 项并分页浏览")
     let chronologicalView = library.view == "recent"
       || (library.source == "streaming" && library.streaming.libraryMode == "history")
     let indexTargets = (activeTrackSort != "duration"
@@ -748,12 +748,12 @@ struct EchoNativePagesScreen: View {
             VStack(alignment: .leading, spacing: 10) {
               HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                  Text(model.payload?.language == "en" ? "For You" : "????")
+                  Text(model.payload?.language == "en" ? "For You" : "为你推荐")
                     .font(echoFont(size: 19, weight: .bold, design: .rounded))
                   if !library.streaming.recommendationDate.isEmpty {
                     Text(model.payload?.language == "en"
-                      ? "Daily picks ? \(library.streaming.recommendationDate)"
-                      : "???? ? \(library.streaming.recommendationDate)")
+                      ? "Daily picks · \(library.streaming.recommendationDate)"
+                      : "每日推荐 · \(library.streaming.recommendationDate)")
                       .font(echoFont(size: 10, weight: .semibold))
                       .foregroundColor(echoInk.opacity(0.48))
                   }
@@ -769,7 +769,7 @@ struct EchoNativePagesScreen: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(library.busy)
-                .accessibilityLabel(model.payload?.language == "en" ? "Refresh daily recommendations" : "??????")
+                .accessibilityLabel(model.payload?.language == "en" ? "Refresh daily recommendations" : "刷新每日推荐")
               }
               ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 12) {
@@ -815,7 +815,7 @@ struct EchoNativePagesScreen: View {
                   .frame(width: 44, height: 44)
               }
               .buttonStyle(.plain)
-              .accessibilityLabel(model.payload?.language == "en" ? "Clear search" : "????")
+              .accessibilityLabel(model.payload?.language == "en" ? "Clear search" : "清除搜索")
             }
           }
           .padding(.horizontal, 14)
@@ -910,7 +910,7 @@ struct EchoNativePagesScreen: View {
             VStack(alignment: .leading, spacing: 2) {
               Text(library.labels.playlists)
                 .font(echoFont(size: 18, weight: .bold, design: .rounded))
-              Text("\(library.streaming.profileName) ? \(library.streaming.playlistCount)")
+              Text("\(library.streaming.profileName) · \(library.streaming.playlistCount)")
                 .font(echoFont(size: 10, weight: .semibold))
                 .foregroundColor(echoInk.opacity(0.48))
             }
@@ -1061,7 +1061,7 @@ struct EchoNativePagesScreen: View {
                   .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
               }
               .buttonStyle(.plain)
-              .accessibilityLabel(model.payload?.language == "en" ? "Back to collections" : "????")
+              .accessibilityLabel(model.payload?.language == "en" ? "Back to collections" : "返回分类")
 
               if !selectedAlbumId.isEmpty {
                 EchoNativeArtwork(urlString: selectedAlbumArtworkUrl, onError: {})
@@ -1395,7 +1395,7 @@ struct EchoNativePagesScreen: View {
           "source": source,
         ])
       } label: {
-        Label(model.payload?.language == "en" ? "Play album" : "?????", systemImage: "play.fill")
+        Label(model.payload?.language == "en" ? "Play album" : "播放该专辑", systemImage: "play.fill")
       }
       Button {
         onAction([
@@ -1405,7 +1405,7 @@ struct EchoNativePagesScreen: View {
           "source": source,
         ])
       } label: {
-        Label(model.payload?.language == "en" ? "Play in disc and track order" : "?????????", systemImage: "list.number")
+        Label(model.payload?.language == "en" ? "Play in disc and track order" : "按碟序和音轨号播放", systemImage: "list.number")
       }
       if let labels, !playlists.isEmpty {
         Menu {
@@ -1429,7 +1429,7 @@ struct EchoNativePagesScreen: View {
           "text": selectedAlbumTitle,
         ])
       } label: {
-        Label(labels?.createPlaylist ?? (model.payload?.language == "en" ? "Create playlist" : "????"), systemImage: "plus")
+        Label(labels?.createPlaylist ?? (model.payload?.language == "en" ? "Create playlist" : "创建歌单"), systemImage: "plus")
       }
     } label: {
       Image(systemName: "play.fill")
@@ -1437,13 +1437,13 @@ struct EchoNativePagesScreen: View {
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
     }
-    .accessibilityLabel(model.payload?.language == "en" ? "Album playback options" : "??????")
+    .accessibilityLabel(model.payload?.language == "en" ? "Album playback options" : "专辑播放选项")
   }
 
   private var albumSortMenu: some View {
     Menu {
       Picker(
-        model.payload?.language == "en" ? "Sort tracks" : "????",
+        model.payload?.language == "en" ? "Sort tracks" : "歌曲排序",
         selection: Binding(
           get: { albumTrackSort },
           set: { value in
@@ -1452,11 +1452,11 @@ struct EchoNativePagesScreen: View {
           }
         )
       ) {
-        Label(model.payload?.language == "en" ? "Album order" : "????", systemImage: "list.number").tag("default")
-        Label(model.payload?.language == "en" ? "Disc and track number" : "??????", systemImage: "number").tag("track")
-        Label(model.payload?.language == "en" ? "Title" : "??", systemImage: "textformat").tag("title")
-        Label(model.payload?.language == "en" ? "Artist" : "???", systemImage: "person").tag("artist")
-        Label(model.payload?.language == "en" ? "Duration" : "??", systemImage: "clock").tag("duration")
+        Label(model.payload?.language == "en" ? "Album order" : "专辑顺序", systemImage: "list.number").tag("default")
+        Label(model.payload?.language == "en" ? "Disc and track number" : "碟序和音轨号", systemImage: "number").tag("track")
+        Label(model.payload?.language == "en" ? "Title" : "歌名", systemImage: "textformat").tag("title")
+        Label(model.payload?.language == "en" ? "Artist" : "艺术家", systemImage: "person").tag("artist")
+        Label(model.payload?.language == "en" ? "Duration" : "时长", systemImage: "clock").tag("duration")
       }
     } label: {
       Image(systemName: "arrow.up.arrow.down")
@@ -1464,7 +1464,7 @@ struct EchoNativePagesScreen: View {
         .frame(width: 44, height: 44)
         .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
     }
-    .accessibilityLabel(model.payload?.language == "en" ? "Sort album tracks" : "??????")
+    .accessibilityLabel(model.payload?.language == "en" ? "Sort album tracks" : "专辑歌曲排序")
   }
 
   private var librarySortMenu: some View {
@@ -1473,7 +1473,7 @@ struct EchoNativePagesScreen: View {
       Picker(
         model.payload?.language == "en"
           ? (sortingCollections ? "Sort collections" : "Sort tracks")
-          : (sortingCollections ? "????" : "????"),
+          : (sortingCollections ? "分类排序" : "歌曲排序"),
         selection: Binding(
           get: { libraryTrackSort },
           set: { value in
@@ -1482,13 +1482,13 @@ struct EchoNativePagesScreen: View {
           }
         )
       ) {
-        Label(model.payload?.language == "en" ? "Default order" : "????", systemImage: "list.bullet").tag("default")
+        Label(model.payload?.language == "en" ? "Default order" : "默认排序", systemImage: "list.bullet").tag("default")
         Label(
-          model.payload?.language == "en" ? (sortingCollections ? "Name" : "Title") : (sortingCollections ? "??" : "??"),
+          model.payload?.language == "en" ? (sortingCollections ? "Name" : "Title") : (sortingCollections ? "名称" : "歌名"),
           systemImage: "textformat"
         ).tag("title")
-        Label(model.payload?.language == "en" ? "Artist" : "???", systemImage: "person").tag("artist")
-        Label(model.payload?.language == "en" ? "Duration" : "??", systemImage: "clock").tag("duration")
+        Label(model.payload?.language == "en" ? "Artist" : "艺术家", systemImage: "person").tag("artist")
+        Label(model.payload?.language == "en" ? "Duration" : "时长", systemImage: "clock").tag("duration")
       }
     } label: {
       Image(systemName: "arrow.up.arrow.down")
@@ -1498,7 +1498,7 @@ struct EchoNativePagesScreen: View {
     }
     .accessibilityLabel(model.payload?.language == "en"
       ? (sortingCollections ? "Sort collections" : "Sort tracks")
-      : (sortingCollections ? "????" : "????"))
+      : (sortingCollections ? "分类排序" : "歌曲排序"))
   }
 
   private func clearAlbumSelection() {
@@ -1543,7 +1543,7 @@ struct EchoNativePagesScreen: View {
       Button {
         onAction(["action": "libraryExpand", "enabled": false])
       } label: {
-        Label(model.payload?.language == "en" ? "Collapse" : "??", systemImage: "arrow.down.right.and.arrow.up.left")
+        Label(model.payload?.language == "en" ? "Collapse" : "收起", systemImage: "arrow.down.right.and.arrow.up.left")
           .font(echoFont(size: 12, weight: .bold))
           .padding(.horizontal, 12)
           .frame(minHeight: 40)
@@ -1564,7 +1564,7 @@ struct EchoNativePagesScreen: View {
     labels: EchoNativeLibraryLabels
   ) -> some View {
     let discSubtitle = selectedCollectionIsAlbum
-      ? "DISC \((track.discNo ?? 1) > 0 ? (track.discNo ?? 1) : 1) ? \(track.artist)"
+      ? "DISC \((track.discNo ?? 1) > 0 ? (track.discNo ?? 1) : 1) · \(track.artist)"
       : track.artist
     return EchoNativeMediaGridCard(
       artworkUrl: track.artworkUrl,
@@ -1629,7 +1629,7 @@ struct EchoNativePagesScreen: View {
           Button {
             onAction(["action": "playlistPlay", "playlistId": playlist.id])
           } label: {
-            Label(model.payload?.language == "en" ? "Play all" : "????", systemImage: "play.fill")
+            Label(model.payload?.language == "en" ? "Play all" : "播放全部", systemImage: "play.fill")
           }
           .disabled(playlist.trackCount == 0)
           Button {
@@ -1686,7 +1686,7 @@ struct EchoNativePagesScreen: View {
     EchoNativeMediaRow(
       artworkUrl: playlist.artworkUrl,
       title: playlist.name,
-      subtitle: "\(playlist.sourceLabel) ? \(playlist.trackCount)",
+      subtitle: "\(playlist.sourceLabel) · \(playlist.trackCount)",
       badges: playlistBadges(playlist),
       onSelect: { onAction(["action": "streamingPlaylistOpen", "id": playlist.id]) }
     ) {
@@ -1706,7 +1706,7 @@ struct EchoNativePagesScreen: View {
       Button {
         onAction(["action": "streamingPlaylistOpen", "id": playlist.id, "play": true])
       } label: {
-        Label(model.payload?.language == "en" ? "Play all" : "????", systemImage: "play.fill")
+        Label(model.payload?.language == "en" ? "Play all" : "播放全部", systemImage: "play.fill")
       }
       .disabled(playlist.trackCount == 0)
       Button {
@@ -1853,12 +1853,12 @@ struct EchoNativePagesScreen: View {
         Button {
           onAction(["action": "remoteTrackControl", "id": track.id])
         } label: {
-          Label(model.payload?.language == "en" ? "Control with Poweramp" : "Poweramp ??", systemImage: "speaker.wave.2")
+          Label(model.payload?.language == "en" ? "Control with Poweramp" : "Poweramp 播放", systemImage: "speaker.wave.2")
         }
         Button {
           onAction(["action": "remoteTrackStream", "id": track.id])
         } label: {
-          Label(model.payload?.language == "en" ? "Stream to iPhone" : "??? iPhone", systemImage: "iphone.and.arrow.forward")
+          Label(model.payload?.language == "en" ? "Stream to iPhone" : "串流到 iPhone", systemImage: "iphone.and.arrow.forward")
         }
       }
       Button {
@@ -1907,7 +1907,7 @@ struct EchoNativePagesScreen: View {
         if connection.mode == "streaming" {
           connectionSection(
             symbol: "music.note.house",
-            title: model.payload?.language == "en" ? "NetEase Cloud Music" : "?????"
+            title: model.payload?.language == "en" ? "NetEase Cloud Music" : "网易云音乐"
           ) {
             EchoNativeSegmentedControl(
               options: connection.streaming.accessModeOptions,
@@ -1931,8 +1931,8 @@ struct EchoNativePagesScreen: View {
 
             Label(
               connection.streaming.accessMode == "direct"
-                ? (model.payload?.language == "en" ? "Unofficial NetEase Web API" : "?????? Web ??")
-                : (model.payload?.language == "en" ? "Your NeteaseCloudMusicApi service" : "?? NeteaseCloudMusicApi ??"),
+                ? (model.payload?.language == "en" ? "Unofficial NetEase Web API" : "非官方网易云 Web 接口")
+                : (model.payload?.language == "en" ? "Your NeteaseCloudMusicApi service" : "你的 NeteaseCloudMusicApi 服务"),
               systemImage: "network"
             )
             .font(echoFont(size: 12, weight: .semibold))
@@ -1949,8 +1949,8 @@ struct EchoNativePagesScreen: View {
                     .font(echoFont(size: 17, weight: .bold))
                     .lineLimit(1)
                   Text(model.payload?.language == "en"
-                    ? "NetEase ? \(connection.streaming.playlistCount) playlists"
-                    : "??? ? \(connection.streaming.playlistCount) ???")
+                    ? "NetEase · \(connection.streaming.playlistCount) playlists"
+                    : "网易云 · \(connection.streaming.playlistCount) 个歌单")
                     .font(echoFont(size: 11, weight: .semibold))
                     .foregroundColor(echoInk.opacity(0.5))
                 }
@@ -1958,7 +1958,7 @@ struct EchoNativePagesScreen: View {
                 Button(role: .destructive) {
                   showStreamingLogoutConfirmation = true
                 } label: {
-                  Text(model.payload?.language == "en" ? "Sign out" : "??")
+                  Text(model.payload?.language == "en" ? "Sign out" : "退出")
                     .font(echoFont(size: 12, weight: .bold))
                     .foregroundColor(echoAccent)
                     .padding(.horizontal, 13)
@@ -1975,7 +1975,7 @@ struct EchoNativePagesScreen: View {
                   showNeteaseWebLogin = true
                 } label: {
                   Label(
-                    model.payload?.language == "en" ? "Official web sign in" : "??????",
+                    model.payload?.language == "en" ? "Official web sign in" : "官方网页登录",
                     systemImage: "safari"
                   )
                   .font(echoFont(size: 13, weight: .bold))
@@ -1994,7 +1994,7 @@ struct EchoNativePagesScreen: View {
                   HStack(spacing: 8) {
                     if connection.streaming.busy { ProgressView().controlSize(.small) }
                     Image(systemName: "qrcode")
-                    Text(model.payload?.language == "en" ? "QR code sign in" : "????")
+                    Text(model.payload?.language == "en" ? "QR code sign in" : "扫码登录")
                   }
                   .font(echoFont(size: 13, weight: .bold))
                   .frame(maxWidth: .infinity)
@@ -2016,7 +2016,7 @@ struct EchoNativePagesScreen: View {
                   saveNeteaseQrAndOpen(connection.streaming.qrUrl)
                 } label: {
                   Label(
-                    model.payload?.language == "en" ? "Save QR and open NetEase" : "???????????",
+                    model.payload?.language == "en" ? "Save QR and open NetEase" : "保存二维码并打开网易云",
                     systemImage: "square.and.arrow.down"
                   )
                   .font(echoFont(size: 12, weight: .bold))
@@ -2030,7 +2030,7 @@ struct EchoNativePagesScreen: View {
 
                 Text(model.payload?.language == "en"
                   ? "In NetEase, open Scan and choose the saved QR from Photos. Return here after approval."
-                  : "????????????????????????????????")
+                  : "在网易云中打开扫一扫，从相册选择刚保存的二维码；授权后返回这里。")
                   .font(echoFont(size: 10, weight: .medium))
                   .foregroundColor(echoInk.opacity(0.44))
                   .fixedSize(horizontal: false, vertical: true)
@@ -2050,8 +2050,8 @@ struct EchoNativePagesScreen: View {
                 ? "Use official web sign-in. Session credentials stay in iOS Keychain."
                 : "This uses your NeteaseCloudMusicApi service. Session credentials stay in iOS Keychain.")
               : (connection.streaming.accessMode == "direct"
-                ? "????????????????? iOS ????"
-                : "?????? NeteaseCloudMusicApi ????????????? iOS ????"))
+                ? "使用官方网页登录。登录凭据仅保存在 iOS 钥匙串。"
+                : "当前通过你的 NeteaseCloudMusicApi 服务登录。登录凭据仅保存在 iOS 钥匙串。"))
               .font(echoFont(size: 10, weight: .medium))
               .foregroundColor(echoInk.opacity(0.42))
               .fixedSize(horizontal: false, vertical: true)
@@ -2160,11 +2160,11 @@ struct EchoNativePagesScreen: View {
           .frame(width: 42, height: 42)
           .echoGlass(tint: echoAccent.opacity(0.08), interactive: false, in: Circle())
         VStack(alignment: .leading, spacing: 3) {
-          Text(model.payload?.language == "en" ? "Connect Poweramp" : "?? Poweramp")
+          Text(model.payload?.language == "en" ? "Connect Poweramp" : "连接 Poweramp")
             .font(echoFont(size: 15, weight: .bold))
           Text(model.payload?.language == "en"
             ? "Control Poweramp or stream Android music to this iPhone."
-            : "?? Poweramp??????????? iPhone?")
+            : "控制 Poweramp，或将安卓音乐串流到此 iPhone。")
             .font(echoFont(size: 11, weight: .medium))
             .foregroundColor(echoInk.opacity(0.5))
             .fixedSize(horizontal: false, vertical: true)
@@ -2186,7 +2186,7 @@ struct EchoNativePagesScreen: View {
       connectionSection(symbol: "qrcode.viewfinder", title: connection.labels.pairLink) {
         Text(model.payload?.language == "en"
           ? "Scan the pairing code shown by the Android Poweramp Remote service."
-          : "????? Poweramp Remote ???????????")
+          : "扫描安卓端 Poweramp Remote 服务显示的配对二维码。")
           .font(echoFont(size: 11, weight: .medium))
           .foregroundColor(echoInk.opacity(0.5))
           .fixedSize(horizontal: false, vertical: true)
@@ -2197,12 +2197,12 @@ struct EchoNativePagesScreen: View {
 
       connectionSection(symbol: "slider.horizontal.3", title: connection.labels.manual) {
         EchoNativeTextField(
-          placeholder: model.payload?.language == "en" ? "Android address" : "????",
+          placeholder: model.payload?.language == "en" ? "Android address" : "安卓地址",
           text: powerampBinding(remote, keyPath: \.host, field: "host")
         )
         HStack(spacing: 10) {
           EchoNativeTextField(
-            placeholder: model.payload?.language == "en" ? "Name" : "??",
+            placeholder: model.payload?.language == "en" ? "Name" : "名称",
             text: powerampBinding(remote, keyPath: \.name, field: "name")
           )
           EchoNativeTextField(
@@ -2403,8 +2403,8 @@ struct EchoNativePagesScreen: View {
                     .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help(model.payload?.language == "en" ? "Restore this section" : "????????")
-                .accessibilityLabel(model.payload?.language == "en" ? "Restore this section" : "????????")
+                .help(model.payload?.language == "en" ? "Restore this section" : "恢复本栏默认设置")
+                .accessibilityLabel(model.payload?.language == "en" ? "Restore this section" : "恢复本栏默认设置")
               }
             }
 
@@ -2553,7 +2553,7 @@ struct EchoNativePagesScreen: View {
             )
             .labelsHidden()
             .frame(width: 32, height: 32)
-            .accessibilityLabel(model.payload?.language == "en" ? "Custom theme color" : "??????")
+            .accessibilityLabel(model.payload?.language == "en" ? "Custom theme color" : "自定义主题色")
           }
           .padding(.vertical, 2)
         }
@@ -2716,7 +2716,7 @@ private struct EchoNativePlaylistEditorSheet: View {
     VStack(alignment: .leading, spacing: 18) {
       Text(editorTitle)
         .font(echoFont(size: 24, weight: .bold, design: .rounded))
-      TextField(labels?.playlistName ?? "????", text: $name)
+      TextField(labels?.playlistName ?? "歌单名称", text: $name)
         .textFieldStyle(.plain)
         .padding(.horizontal, 14)
         .frame(minHeight: 46)
@@ -2725,7 +2725,7 @@ private struct EchoNativePlaylistEditorSheet: View {
         .onSubmit(save)
       Spacer(minLength: 0)
       HStack(spacing: 12) {
-        EchoNativeLabelButton(symbol: "xmark", title: labels?.cancel ?? "??") { dismiss() }
+        EchoNativeLabelButton(symbol: "xmark", title: labels?.cancel ?? "取消") { dismiss() }
         Spacer(minLength: 12)
         EchoNativeLabelButton(
           symbol: "checkmark",
@@ -2743,8 +2743,8 @@ private struct EchoNativePlaylistEditorSheet: View {
 
   private var editorTitle: String {
     editor.playlistId == nil
-      ? (labels?.createPlaylist ?? "????")
-      : (labels?.renamePlaylist ?? "?????")
+      ? (labels?.createPlaylist ?? "创建歌单")
+      : (labels?.renamePlaylist ?? "重命名歌单")
   }
 
   private func save() {
@@ -2816,17 +2816,17 @@ private struct EchoNativePlaylistDetailSheet: View {
                   "sort": playlistTrackSort,
                 ])
               } label: {
-                Label(model.payload?.language == "en" ? "Play all" : "????", systemImage: "play.fill")
+                Label(model.payload?.language == "en" ? "Play all" : "播放全部", systemImage: "play.fill")
               }
             }
             Picker(
-              model.payload?.language == "en" ? "Sort tracks" : "????",
+              model.payload?.language == "en" ? "Sort tracks" : "歌曲排序",
               selection: $playlistTrackSort
             ) {
-              Label(model.payload?.language == "en" ? "Playlist order" : "????", systemImage: "list.number").tag("default")
-              Label(model.payload?.language == "en" ? "Title" : "??", systemImage: "textformat").tag("title")
-              Label(model.payload?.language == "en" ? "Artist" : "???", systemImage: "person").tag("artist")
-              Label(model.payload?.language == "en" ? "Duration" : "??", systemImage: "clock").tag("duration")
+              Label(model.payload?.language == "en" ? "Playlist order" : "歌单顺序", systemImage: "list.number").tag("default")
+              Label(model.payload?.language == "en" ? "Title" : "歌名", systemImage: "textformat").tag("title")
+              Label(model.payload?.language == "en" ? "Artist" : "艺术家", systemImage: "person").tag("artist")
+              Label(model.payload?.language == "en" ? "Duration" : "时长", systemImage: "clock").tag("duration")
             }
           } label: {
             Image(systemName: "ellipsis")
@@ -2834,7 +2834,7 @@ private struct EchoNativePlaylistDetailSheet: View {
               .frame(width: 44, height: 44)
               .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
           }
-          .accessibilityLabel(model.payload?.language == "en" ? "Playlist options" : "????")
+          .accessibilityLabel(model.payload?.language == "en" ? "Playlist options" : "歌单选项")
         }
         Button {
           onAction(["action": "playlistClose"])
@@ -2890,7 +2890,7 @@ private struct EchoNativePlaylistDetailSheet: View {
                     ])
                   } label: {
                     Label(
-                      model.payload?.library?.labels.removeFromPlaylist ?? "?????",
+                      model.payload?.library?.labels.removeFromPlaylist ?? "从歌单移除",
                       systemImage: "trash"
                     )
                   }
@@ -2911,7 +2911,7 @@ private struct EchoNativePlaylistDetailSheet: View {
         VStack(spacing: 12) {
           Image(systemName: "music.note.list")
             .font(echoFont(size: 28, weight: .medium))
-          Text(model.payload?.language == "en" ? "Add songs from the library." : "?????????????")
+          Text(model.payload?.language == "en" ? "Add songs from the library." : "从曲库中选择歌曲加入歌单。")
             .font(echoFont(size: 13, weight: .semibold))
         }
         .foregroundColor(echoInk.opacity(0.42))
@@ -2948,9 +2948,9 @@ private struct EchoPairingScannerSheet: View {
       VStack(spacing: 0) {
         HStack {
           VStack(alignment: .leading, spacing: 3) {
-            Text(language == "en" ? "Scan Pairing Code" : "???????")
+            Text(language == "en" ? "Scan Pairing Code" : "扫描配对二维码")
               .font(echoFont(size: 22, weight: .bold, design: .rounded))
-            Text(language == "en" ? "Point the camera at the QR code shown by \(serviceName)." : "? \(serviceName) ????????????")
+            Text(language == "en" ? "Point the camera at the QR code shown by \(serviceName)." : "将 \(serviceName) 显示的二维码放入取景框。")
               .font(echoFont(size: 11, weight: .semibold))
               .foregroundColor(.white.opacity(0.7))
           }
@@ -2964,7 +2964,7 @@ private struct EchoPairingScannerSheet: View {
               .echoGlass(tint: Color.black.opacity(0.14), in: Circle())
           }
           .buttonStyle(.plain)
-          .accessibilityLabel(language == "en" ? "Close scanner" : "????")
+          .accessibilityLabel(language == "en" ? "Close scanner" : "关闭扫码")
         }
         .foregroundColor(.white)
         .padding(.horizontal, 20)
@@ -2983,7 +2983,7 @@ private struct EchoPairingScannerSheet: View {
           Button {
             showPhotoPicker = true
           } label: {
-            Label(language == "en" ? "Choose from Photos" : "?????", systemImage: "photo")
+            Label(language == "en" ? "Choose from Photos" : "从相册选择", systemImage: "photo")
               .font(echoFont(size: 13, weight: .bold))
               .padding(.horizontal, 18)
               .frame(height: 42)
@@ -2991,7 +2991,7 @@ private struct EchoPairingScannerSheet: View {
           }
           .buttonStyle(.plain)
 
-          Text(language == "en" ? "The \(serviceName) connection is saved after a successful scan." : "?????????? \(serviceName) ?????")
+          Text(language == "en" ? "The \(serviceName) connection is saved after a successful scan." : "识别成功后会自动保存 \(serviceName) 连接信息。")
             .font(echoFont(size: 12, weight: .semibold))
             .foregroundColor(.white.opacity(0.76))
             .multilineTextAlignment(.center)
@@ -3005,13 +3005,13 @@ private struct EchoPairingScannerSheet: View {
         VStack(spacing: 14) {
           Image(systemName: "camera.fill")
             .font(echoFont(size: 30, weight: .medium))
-          Text(language == "en" ? "Camera access is required" : "??????")
+          Text(language == "en" ? "Camera access is required" : "需要相机权限")
             .font(echoFont(size: 20, weight: .bold))
-          Text(language == "en" ? "Enable Camera for ECHO iPhone in Settings, then scan again." : "????????? ECHO iPhone ????????????")
+          Text(language == "en" ? "Enable Camera for ECHO iPhone in Settings, then scan again." : "请在系统设置中允许 ECHO iPhone 使用相机，然后重新扫码。")
             .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(.white.opacity(0.68))
             .multilineTextAlignment(.center)
-          Button(language == "en" ? "Open Settings" : "????") {
+          Button(language == "en" ? "Open Settings" : "打开设置") {
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
             UIApplication.shared.open(url)
           }
@@ -3022,7 +3022,7 @@ private struct EchoPairingScannerSheet: View {
           Button {
             showPhotoPicker = true
           } label: {
-            Label(language == "en" ? "Choose from Photos" : "?????", systemImage: "photo")
+            Label(language == "en" ? "Choose from Photos" : "从相册选择", systemImage: "photo")
               .font(echoFont(size: 13, weight: .bold))
               .padding(.horizontal, 18)
               .frame(height: 42)
@@ -3050,10 +3050,10 @@ private struct EchoPairingScannerSheet: View {
         }
       )
     }
-    .alert(language == "en" ? "No QR code found" : "???????", isPresented: $photoError) {
-      Button(language == "en" ? "OK" : "?", role: .cancel) {}
+    .alert(language == "en" ? "No QR code found" : "未识别到二维码", isPresented: $photoError) {
+      Button(language == "en" ? "OK" : "好", role: .cancel) {}
     } message: {
-      Text(language == "en" ? "Choose a clear image containing a \(serviceName) pairing QR code." : "??????? \(serviceName) ?????????")
+      Text(language == "en" ? "Choose a clear image containing a \(serviceName) pairing QR code." : "请选择包含清晰 \(serviceName) 配对二维码的图片。")
     }
   }
 }
@@ -3425,7 +3425,7 @@ private struct EchoNativeDisplayModeButton: View {
     .buttonStyle(.plain)
     .accessibilityLabel(language == "en"
       ? (mode == "grid" ? "Use list view" : "Use large artwork view")
-      : (mode == "grid" ? "??????" : "??????"))
+      : (mode == "grid" ? "切换列表视图" : "切换大图视图"))
   }
 }
 
