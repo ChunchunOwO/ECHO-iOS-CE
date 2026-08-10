@@ -198,7 +198,14 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private var needsContinuousRendering: Bool {
     if !hasRenderedFrame || pictureInPictureController?.isPictureInPictureActive != true { return true }
-    return hasTrack && (isPlaying || (configuration.transitionAnimation && CACurrentMediaTime() - lyricTransitionStartedAt < 0.35))
+    let continuousEffect = isPlaying && (
+      configuration.timedReveal
+        || configuration.rainbowGradient
+        || configuration.visualizer != "off"
+        || currentLineStartMs < 0
+    )
+    let lyricTransition = configuration.transitionAnimation && CACurrentMediaTime() - lyricTransitionStartedAt < 0.35
+    return hasTrack && (continuousEffect || lyricTransition)
   }
 
   private func refreshPresentation() {
@@ -269,10 +276,12 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private func startRenderTimer() {
     guard renderTimer == nil else { return }
-    renderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
+    let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.refreshPresentation() }
     }
-    renderTimer?.tolerance = 0.025
+    timer.tolerance = 1.0 / 120.0
+    RunLoop.main.add(timer, forMode: .common)
+    renderTimer = timer
   }
 
   private func renderFrame() {
