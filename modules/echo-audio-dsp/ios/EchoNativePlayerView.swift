@@ -63,7 +63,7 @@ var echoWarmBackground: LinearGradient {
 }
 
 func echoColor(hex: String) -> Color {
-  let value = UInt64(hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted), radix: 16) ?? 0xAC1F24
+  let value = UInt64(hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted), radix: 16) ?? 0x69508F
   return Color(
     red: Double((value >> 16) & 0xff) / 255,
     green: Double((value >> 8) & 0xff) / 255,
@@ -374,7 +374,7 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var signalTelemetrySource = "unverified"
   @Published var tags: [String] = []
   @Published var title = ""
-  @Published var themeColorHex = "AC1F24"
+  @Published var themeColorHex = "69508F"
   @Published var volume = 1.0
   private var lastExternalSourcePickerJSON = ""
   private var lastQueuePayloadJSON = ""
@@ -534,7 +534,6 @@ private struct EchoNativeAppScreen: View {
   @ViewBuilder
   private var appBackground: some View {
     ZStack {
-      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       if (playerModel.activePage == "control" || playerModel.appearanceBackground == "artwork")
         && !playerModel.artworkUrl.isEmpty {
         EchoNativeArtworkBackdrop(
@@ -561,6 +560,8 @@ private struct EchoNativeAppScreen: View {
         )
         .ignoresSafeArea()
         .allowsHitTesting(false)
+      } else {
+        echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       }
       EchoNativeSakuraBackdrop(color: echoColor(hex: playerModel.themeColorHex))
         .ignoresSafeArea()

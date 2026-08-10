@@ -2511,17 +2511,17 @@ struct EchoNativePagesScreen: View {
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 8) {
             ForEach(row.options) { option in
-              let currentColor = currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24"
+              let currentColor = currentSettingRow(row.id)?.selection ?? row.selection ?? "69508F"
               let selected = option.id == "default"
-                ? currentColor == "AC1F24"
-                : option.id == currentColor && currentColor != "AC1F24"
+                ? currentColor == "69508F"
+                : option.id == currentColor && currentColor != "69508F"
               Button {
-                let selection = option.id == "default" ? "AC1F24" : option.id
+                let selection = option.id == "default" ? "69508F" : option.id
                 updateSettingRow(row.id) { $0.selection = selection }
                 onAction(["action": "settingSelect", "key": row.id, "selection": selection])
               } label: {
                 Circle()
-                  .fill(echoColor(hex: option.id == "default" ? "AC1F24" : option.id))
+                  .fill(echoColor(hex: option.id == "default" ? "69508F" : option.id))
                   .frame(width: 30, height: 30)
                   .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 1))
                   .overlay(Circle().stroke(echoInk.opacity(selected ? 0.42 : 0.16), lineWidth: 1))
@@ -2542,7 +2542,7 @@ struct EchoNativePagesScreen: View {
             ColorPicker(
               "",
               selection: Binding(
-                get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24") },
+                get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? "69508F") },
                 set: { color in
                   guard let selection = echoHex(color: color) else { return }
                   updateSettingRow(row.id) { $0.selection = selection }

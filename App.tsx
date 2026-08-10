@@ -95,7 +95,7 @@ function NativeEchoApp(): ReactElement {
             neteaseExternalDataEnabled: settings.neteaseExternalDataEnabled ?? true,
             repeatOne: false,
             showArtworkGlow: settings.showArtworkGlow ?? true,
-            showPowerampRemote: settings.showPowerampRemoteConnection ?? false,
+            showPowerampRemote: settings.showPowerampRemoteConnection ?? true,
           },
         },
         streamingFavoritePlaylistIds: streaming.favoritePlaylistIds,

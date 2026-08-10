@@ -236,6 +236,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(desktopLyrics, /for character in text/u);
   assert.match(desktopLyrics, /saturation: 0\.38/u);
   assert.match(desktopLyrics, /restoreRequested = true/u);
+  assert.match(desktopLyrics, /if !hasTrack \{[\s\S]*hasRenderedFrame = false[\s\S]*renderFrame\(\)/u);
+  assert.match(desktopLyrics, /context\.setFillColor\(base\.cgColor\)/u);
   assert.match(desktopLyrics, /self\.trackKey != trackKey/u);
   assert.match(desktopLyrics, /max\(8, inset - 8\)/u);
   assert.ok(desktopLyrics.indexOf('drawBackground(in: context') < desktopLyrics.indexOf('drawVisualizer(in: context'));
@@ -272,8 +274,14 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(localLibrary, /static func embedExternalMetadata/u);
   assert.match(localLibrary, /appendingPathExtension\("echo-metadata\.json"\)/u);
   assert.match(coreTypes, /var desktopLyricsFontSize = 32\.0/u);
+  assert.match(coreTypes, /var desktopLyricsBackground = "artwork"/u);
+  assert.match(coreTypes, /var desktopLyricsTimedReveal = true/u);
+  assert.match(coreTypes, /var desktopLyricsTransitionAnimation = true/u);
   assert.match(coreTypes, /var desktopLyricsRainbowGradient = false/u);
   assert.match(coreTypes, /var desktopLyricsVisualizer = "off"/u);
+  assert.match(coreTypes, /var showPowerampRemote = true/u);
+  assert.match(coreTypes, /var themeColorHex = "69508F"/u);
+  assert.match(app, /showPowerampRemote: settings\.showPowerampRemoteConnection \?\? true/u);
   assert.match(payload, /desktopLyricsSize"[\s\S]*min: 18, max: 48/u);
   assert.match(payload, /toggle\("desktopLyricsRainbowGradient"/u);
   assert.match(payload, /picker\("desktopLyricsVisualizer"/u);
@@ -304,7 +312,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(themedTab, /EchoNativeArtworkBackdrop\(/u);
   assert.match(themedTab, /appBackground/u);
   assert.match(appBackground, /activePage == "control" \|\| playerModel\.appearanceBackground == "artwork"/u);
-  assert.ok(appBackground.indexOf('echoThemeBackground') < appBackground.indexOf('EchoNativeArtworkBackdrop'));
+  assert.ok(appBackground.indexOf('echoThemeBackground') > appBackground.indexOf('EchoNativeArtworkBackdrop'));
   assert.match(appBackground, /activePage != "control"[\s\S]*appearanceBackground == "custom"[\s\S]*appearanceImageUrl\.isEmpty/u);
   assert.match(player, /ZStack \{\s+echoWarmBackground\s+if !stableUrl\.isEmpty/u);
   assert.match(player, /@Binding var stableIdentity: String/u);
