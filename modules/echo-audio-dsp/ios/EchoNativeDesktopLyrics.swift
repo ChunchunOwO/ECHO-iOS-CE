@@ -34,7 +34,6 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }()
   private let displayLayer = AVSampleBufferDisplayLayer()
   private let hostView = UIView(frame: CGRect(x: 0, y: 0, width: 108, height: 32))
-  private let renderScale = 2
   private var pictureInPictureController: AVPictureInPictureController?
   private var pictureInPicturePossibleObservation: NSKeyValueObservation?
   private var renderTimer: Timer?
@@ -65,6 +64,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private var restoreRequested = false
   private var startRequested = false
   private var startRetryAfter = 0.0
+  private var hasRenderedFrame = false
   private var lyricTransitionStartedAt = CACurrentMediaTime()
 
   override init() {
@@ -215,6 +215,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       startRequested = false
     }
     displayLayer.flushAndRemoveImage()
+    hasRenderedFrame = false
   }
 
   private func startIfNeeded() {
@@ -225,11 +226,14 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       let pictureInPictureController,
       !pictureInPictureController.isPictureInPictureActive,
       !startRequested,
+      hasRenderedFrame,
       CACurrentMediaTime() >= startRetryAfter,
       pictureInPictureController.isPictureInPicturePossible
     else { return }
     startRequested = true
     activateAudioSession()
+    pictureInPictureController.invalidatePlaybackState()
+    CATransaction.flush()
     pictureInPictureController.startPictureInPicture()
   }
 
@@ -261,19 +265,20 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private func renderFrame() {
-    guard hasContent, let sampleBuffer = makeSampleBuffer() else { return }
+    guard hasContent else { return }
     if displayLayer.status == .failed {
       pictureInPictureController?.invalidatePlaybackState()
       displayLayer.flushAndRemoveImage()
+      hasRenderedFrame = false
     }
+    guard displayLayer.isReadyForMoreMediaData, let sampleBuffer = makeSampleBuffer() else { return }
     displayLayer.enqueue(sampleBuffer)
+    hasRenderedFrame = true
   }
 
   private func makeSampleBuffer() -> CMSampleBuffer? {
     let width = canvasWidth(for: configuration.widthScale)
     let height = canvasHeight(for: configuration.heightScale)
-    let pixelWidth = width * renderScale
-    let pixelHeight = height * renderScale
     var pixelBuffer: CVPixelBuffer?
     let attributes: [String: Any] = [
       kCVPixelBufferCGImageCompatibilityKey as String: true,
@@ -282,17 +287,16 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     ]
     guard CVPixelBufferCreate(
       kCFAllocatorDefault,
-      pixelWidth,
-      pixelHeight,
+      width,
+      height,
       kCVPixelFormatType_32BGRA,
       attributes as CFDictionary,
       &pixelBuffer
     ) == kCVReturnSuccess,
       let pixelBuffer,
-      let context = makeContext(for: pixelBuffer, width: pixelWidth, height: pixelHeight)
+      let context = makeContext(for: pixelBuffer, width: width, height: height)
     else { return nil }
 
-    context.scaleBy(x: CGFloat(renderScale), y: CGFloat(renderScale))
     drawFrame(in: context, width: width, height: height)
     CVPixelBufferUnlockBaseAddress(pixelBuffer, .init(rawValue: 0))
 
@@ -851,6 +855,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     renderTimer?.invalidate()
     renderTimer = nil
     displayLayer.flushAndRemoveImage()
+    hasRenderedFrame = false
     if shouldRestart {
       refreshPresentation()
     }

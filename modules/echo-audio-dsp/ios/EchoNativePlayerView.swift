@@ -71,6 +71,20 @@ func echoColor(hex: String) -> Color {
   )
 }
 
+func echoHex(color: Color) -> String? {
+  var red: CGFloat = 0
+  var green: CGFloat = 0
+  var blue: CGFloat = 0
+  var alpha: CGFloat = 0
+  guard UIColor(color).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return nil }
+  return String(
+    format: "%02X%02X%02X",
+    Int((red * 255).rounded()),
+    Int((green * 255).rounded()),
+    Int((blue * 255).rounded())
+  )
+}
+
 func echoFont(
   size: CGFloat,
   weight: Font.Weight = .regular,
@@ -91,7 +105,7 @@ private func echoThemeBackground(_ hex: String) -> some View {
   return ZStack {
     echoWarmBackground
     LinearGradient(
-      colors: [color.opacity(0.52), echoGold.opacity(0.14), Color.white.opacity(0.08)],
+      colors: [color.opacity(0.72), color.opacity(0.36), Color.white.opacity(0.08)],
       startPoint: .topLeading,
       endPoint: .bottomTrailing
     )
@@ -305,11 +319,9 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var alertMessage = ""
   @Published var alertTitle = ""
   @Published var artist = ""
-  @Published var appearanceBackground = "artwork"
+  @Published var appearanceBackground = "theme"
   @Published var appearanceImageUrl = ""
-  @Published var appearancePattern = "sakura"
   @Published var artworkBackgroundEnabled = true
-  @Published var artworkMotionEnabled = true
   @Published var artworkUrl = ""
   @Published var connectionLabel = "ECHO未连接"
   @Published var connectionOnline = false
@@ -330,14 +342,13 @@ final class EchoNativePlayerModel: ObservableObject {
   @Published var lyricLines: [EchoNativeMetadataService.LyricLine] = []
   @Published var lyricsVisible = false
   @Published var metadataLoading = false
-  @Published var motionStyle = "fluid"
+  @Published var motionStyle = "subtle"
   @Published var outputMode = "local"
   @Published var playbackMode = EchoNativePlaybackMode.normal
   @Published var playbackLoading = false
   @Published var queuePayload: EchoNativeQueuePayload?
   @Published var showArtworkGlow = true
   @Published var showPlayerOutputInMenu = true
-  @Published var backgroundMotionEnabled = true
   @Published var signalBitDepth = ""
   @Published var signalBitrate = ""
   @Published var signalChannelCount = ""
@@ -505,7 +516,7 @@ private struct EchoNativeAppScreen: View {
     }
     .task {
       guard showingSplash else { return }
-      try? await Task.sleep(nanoseconds: 5_000_000_000)
+      try? await Task.sleep(nanoseconds: 2_000_000_000)
       withAnimation(.easeOut(duration: 0.55)) { showingSplash = false }
     }
   }
@@ -613,13 +624,9 @@ private struct EchoNativeAppScreen: View {
         .allowsHitTesting(false)
       } else {
         echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
-        EchoNativeThemePattern(
-          pattern: playerModel.appearancePattern,
-          animated: playerModel.backgroundMotionEnabled && playerModel.motionStyle != "off"
-        )
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
       }
+      EchoNativeSakuraBackdrop(color: echoColor(hex: playerModel.themeColorHex))
+        .ignoresSafeArea()
 
       content()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -639,47 +646,46 @@ private struct EchoNativeAppScreen: View {
   }
 }
 
-private struct EchoNativeThemePattern: View {
-  let pattern: String
-  let animated: Bool
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
+private struct EchoNativeSakuraBackdrop: View {
+  let color: Color
   var body: some View {
-    TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: !animated || reduceMotion || pattern == "none")) { timeline in
+    GeometryReader { geometry in
+      let blossomSize = min(380, max(220, geometry.size.width * 0.72))
       Canvas { context, size in
-        let time = animated && !reduceMotion ? timeline.date.timeIntervalSinceReferenceDate : 0
-        switch pattern {
-        case "sakura":
-          for index in 0..<18 {
-            let x = (CGFloat(index * 83 % 101) / 100 * size.width + CGFloat(time * 4)).truncatingRemainder(dividingBy: max(1, size.width))
-            let y = CGFloat(index * 47 % 97) / 96 * size.height
-            var symbol = context.resolve(Image(systemName: "camera.macro"))
-            symbol.shading = .color(index.isMultiple(of: 3) ? echoGold.opacity(0.15) : echoAccent.opacity(0.12))
-            context.draw(symbol, at: CGPoint(x: x, y: y))
-          }
-        case "waves":
-          for row in 0..<7 {
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let radius = min(size.width, size.height) * 0.44
+        for index in 0..<5 {
+          context.drawLayer { petal in
+            petal.translateBy(x: center.x, y: center.y)
+            petal.rotate(by: .degrees(Double(index) * 72))
             var path = Path()
-            for step in 0...48 {
-              let x = CGFloat(step) / 48 * size.width
-              let y = CGFloat(row + 1) / 8 * size.height + sin(CGFloat(step) * 0.4 + CGFloat(time) * 0.2) * 8
-              if step == 0 { path.move(to: CGPoint(x: x, y: y)) }
-              else { path.addLine(to: CGPoint(x: x, y: y)) }
-            }
-            context.stroke(path, with: .color(echoAccent.opacity(0.09)), lineWidth: 1)
+            path.move(to: .zero)
+            path.addCurve(
+              to: CGPoint(x: 0, y: -radius),
+              control1: CGPoint(x: radius * 0.5, y: -radius * 0.2),
+              control2: CGPoint(x: radius * 0.42, y: -radius * 0.78)
+            )
+            path.addCurve(
+              to: .zero,
+              control1: CGPoint(x: -radius * 0.42, y: -radius * 0.78),
+              control2: CGPoint(x: -radius * 0.5, y: -radius * 0.2)
+            )
+            petal.fill(path, with: .color(Color.white.opacity(0.1)))
+            petal.stroke(path, with: .color(color.opacity(0.2)), lineWidth: 1.4)
           }
-        case "dots":
-          for row in 0..<10 {
-            for column in 0..<7 {
-              let x = (CGFloat(column) + 0.5) / 7 * size.width
-              let y = (CGFloat(row) + 0.5) / 10 * size.height
-              context.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 2, width: 4, height: 4)), with: .color(echoAccent.opacity(0.1)))
-            }
-          }
-        default: break
         }
+        let core = CGRect(x: center.x - radius * 0.12, y: center.y - radius * 0.12, width: radius * 0.24, height: radius * 0.24)
+        context.fill(Path(ellipseIn: core), with: .color(echoGold.opacity(0.18)))
       }
+      .frame(width: blossomSize, height: blossomSize)
+      .rotationEffect(.degrees(-18))
+      .position(
+        x: geometry.size.width - blossomSize * 0.18,
+        y: geometry.size.height - blossomSize * 0.12
+      )
     }
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
   }
 }
 
@@ -692,8 +698,8 @@ private struct EchoNativeArtworkMotion: ViewModifier {
     TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !enabled || reduceMotion || style == "off")) { timeline in
       let phase = timeline.date.timeIntervalSinceReferenceDate * (style == "fluid" ? 0.7 : 0.42)
       content
-        .scaleEffect(enabled && !reduceMotion ? 1 + sin(phase) * (style == "fluid" ? 0.008 : 0.004) : 1)
-        .rotationEffect(.degrees(enabled && !reduceMotion ? sin(phase * 0.7) * (style == "fluid" ? 0.32 : 0.14) : 0))
+        .scaleEffect(enabled && !reduceMotion ? 1 + sin(phase) * (style == "fluid" ? 0.018 : 0.008) : 1)
+        .rotationEffect(.degrees(enabled && !reduceMotion ? sin(phase * 0.7) * (style == "fluid" ? 0.9 : 0.32) : 0))
     }
   }
 }
@@ -989,7 +995,7 @@ struct EchoNativePlayerScreen: View {
       }
       .frame(height: size)
       .modifier(EchoNativeArtworkMotion(
-        enabled: model.artworkMotionEnabled,
+        enabled: model.motionStyle != "off",
         style: model.motionStyle
       ))
       .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.metadataLoading)

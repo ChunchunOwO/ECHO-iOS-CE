@@ -282,7 +282,6 @@ private struct EchoNativeSettingRow: Decodable, Identifiable {
   let minimumValue: Double?
   var numberValue: Double?
   let options: [EchoNativePageOption]
-  let resettable: Bool
   var selection: String?
   let stepValue: Double?
   let title: String
@@ -292,8 +291,8 @@ private struct EchoNativeSettingRow: Decodable, Identifiable {
 private struct EchoNativeSettingSection: Decodable, Identifiable {
   let description: String
   let id: String
+  let resettable: Bool
   var rows: [EchoNativeSettingRow]
-  let summary: String
   let symbol: String
   let title: String
 }
@@ -2353,49 +2352,61 @@ struct EchoNativePagesScreen: View {
         ForEach(settings.sections) { section in
           let expanded = expandedSection == section.id
           VStack(spacing: 0) {
-            Button {
-              if reduceMotion {
-                expandedSection = expanded ? "" : section.id
-              } else {
-                withAnimation(.easeInOut(duration: 0.24)) {
+            HStack(spacing: 8) {
+              Button {
+                if reduceMotion {
                   expandedSection = expanded ? "" : section.id
+                } else {
+                  withAnimation(.easeInOut(duration: 0.24)) {
+                    expandedSection = expanded ? "" : section.id
+                  }
                 }
+              } label: {
+                HStack(spacing: 12) {
+                  Image(systemName: section.symbol)
+                    .font(echoFont(size: 17, weight: .semibold))
+                    .foregroundColor(expanded ? echoAccent : echoInk.opacity(0.58))
+                    .frame(width: 38, height: 38)
+                    .echoGlass(
+                      tint: expanded ? echoAccent.opacity(0.08) : Color.white.opacity(0.08),
+                      clear: !expanded,
+                      in: Circle()
+                    )
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text(section.title)
+                      .font(echoFont(size: 15, weight: .bold))
+                    Text(section.description)
+                      .font(echoFont(size: 11, weight: .medium))
+                      .foregroundColor(echoInk.opacity(0.48))
+                      .lineLimit(expanded ? 2 : 1)
+                  }
+                  Spacer(minLength: 6)
+                  Image(systemName: "chevron.down")
+                    .font(echoFont(size: 12, weight: .bold))
+                    .foregroundColor(echoInk.opacity(0.38))
+                    .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity, alignment: .leading)
               }
-            } label: {
-              HStack(spacing: 12) {
-                Image(systemName: section.symbol)
-                  .font(echoFont(size: 17, weight: .semibold))
-                  .foregroundColor(expanded ? echoAccent : echoInk.opacity(0.58))
-                  .frame(width: 38, height: 38)
-                  .echoGlass(
-                    tint: expanded ? echoAccent.opacity(0.08) : Color.white.opacity(0.08),
-                    clear: !expanded,
-                    in: Circle()
-                  )
-                VStack(alignment: .leading, spacing: 3) {
-                  Text(section.title)
-                    .font(echoFont(size: 15, weight: .bold))
-                  Text(section.description)
-                    .font(echoFont(size: 11, weight: .medium))
-                    .foregroundColor(echoInk.opacity(0.48))
-                    .lineLimit(expanded ? 2 : 1)
+              .buttonStyle(.plain)
+
+              if section.resettable {
+                Button {
+                  onAction(["action": "settingResetSection", "section": section.id])
+                } label: {
+                  Image(systemName: "arrow.counterclockwise")
+                    .font(echoFont(size: 12, weight: .bold))
+                    .foregroundColor(echoInk.opacity(0.5))
+                    .frame(width: 34, height: 38)
+                    .contentShape(Circle())
                 }
-                Spacer(minLength: 8)
-                if !expanded {
-                  Text(section.summary)
-                    .font(echoFont(size: 10, weight: .bold))
-                    .foregroundColor(echoInk.opacity(0.42))
-                    .lineLimit(1)
-                }
-                Image(systemName: "chevron.down")
-                  .font(echoFont(size: 12, weight: .bold))
-                  .foregroundColor(echoInk.opacity(0.38))
-                  .rotationEffect(.degrees(expanded ? 180 : 0))
+                .buttonStyle(.plain)
+                .help(model.payload?.language == "en" ? "Restore this section" : "恢复本栏默认设置")
+                .accessibilityLabel(model.payload?.language == "en" ? "Restore this section" : "恢复本栏默认设置")
               }
-              .contentShape(Rectangle())
-              .padding(.vertical, 11)
             }
-            .buttonStyle(.plain)
 
             if expanded {
               VStack(spacing: 0) {
@@ -2497,7 +2508,7 @@ struct EchoNativePagesScreen: View {
     case "color":
       VStack(alignment: .leading, spacing: 10) {
         settingHeader(row)
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
           ForEach(row.options) { option in
             let selected = (currentSettingRow(row.id)?.selection ?? row.selection) == option.id
             Button {
@@ -2506,7 +2517,7 @@ struct EchoNativePagesScreen: View {
             } label: {
               Circle()
                 .fill(echoColor(hex: option.id))
-                .frame(width: 32, height: 32)
+                .frame(width: 30, height: 30)
                 .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 1))
                 .overlay(Circle().stroke(echoInk.opacity(selected ? 0.42 : 0.16), lineWidth: 1))
                 .scaleEffect(selected ? 1 : 0.88)
@@ -2515,7 +2526,23 @@ struct EchoNativePagesScreen: View {
             .accessibilityLabel(option.label)
             .accessibilityAddTraits(selected ? .isSelected : [])
           }
+          ColorPicker(
+            "",
+            selection: Binding(
+              get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24") },
+              set: { color in
+                guard let selection = echoHex(color: color) else { return }
+                updateSettingRow(row.id) { $0.selection = selection }
+                onAction(["action": "settingSelect", "key": row.id, "selection": selection])
+              }
+            ),
+            supportsOpacity: false
+          )
+          .labelsHidden()
+          .frame(width: 32, height: 32)
+          .accessibilityLabel(model.payload?.language == "en" ? "Custom theme color" : "自定义主题色")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
       .padding(.vertical, 12)
     case "font":
@@ -2604,23 +2631,7 @@ struct EchoNativePagesScreen: View {
   }
 
   private func settingHeader(_ row: EchoNativeSettingRow) -> some View {
-    HStack(alignment: .center, spacing: 8) {
-      settingText(row)
-      if row.resettable {
-        Button {
-          onAction(["action": "settingReset", "key": row.id])
-        } label: {
-          Image(systemName: "arrow.counterclockwise")
-            .font(echoFont(size: 11, weight: .bold))
-            .foregroundColor(echoInk.opacity(0.48))
-            .frame(width: 30, height: 30)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .help(model.payload?.language == "en" ? "Restore this setting" : "仅还原当前选项")
-        .accessibilityLabel(model.payload?.language == "en" ? "Restore this setting" : "仅还原当前选项")
-      }
-    }
+    settingText(row)
   }
 
   private func sliderValueLabel(_ id: String, value: Double) -> String {

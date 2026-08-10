@@ -452,7 +452,7 @@ final class EchoNativeAppStore {
     case "settingToggle": updateSettingToggle(payload)
     case "settingSelect": updateSettingSelection(payload)
     case "settingNumber": updateSettingNumber(payload)
-    case "settingReset": resetSetting(payload["key"] as? String ?? "")
+    case "settingResetSection": resetSettingsSection(payload["section"] as? String ?? "")
     case "settingAction": performSettingAction(payload)
     default: break
     }
@@ -1958,8 +1958,6 @@ final class EchoNativeAppStore {
     guard let key = payload["key"] as? String, let enabled = payload["enabled"] as? Bool else { return }
     switch key {
     case "followSystemAppearance": persistent.settings.followSystemAppearance = enabled; playerModel.followSystemAppearance = enabled
-    case "artworkMotion": persistent.settings.artworkMotionEnabled = enabled
-    case "backgroundMotion": persistent.settings.backgroundMotionEnabled = enabled
     case "haptics": persistent.settings.hapticsEnabled = enabled
     case "loudness": persistent.settings.loudnessEnabled = enabled; playerModel.loudnessEnabled = enabled; audioEngine.setLoudness(enabled)
     case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = enabled
@@ -2000,7 +1998,10 @@ final class EchoNativeAppStore {
       persistent.settings.showPowerampRemote = enabled
       if !enabled, connectMode == "remote" { connectMode = "echo" }
     default:
-      if key.hasPrefix("audioTag.") { persistent.settings.audioTagVisibility[String(key.dropFirst(9))] = enabled }
+      if key.hasPrefix("audioTag.") {
+        persistent.settings.audioTagVisibility[String(key.dropFirst(9))] = enabled
+        if let currentTrack { playerModel.tags = tags(for: currentTrack) }
+      }
     }
     applyAppearanceSettings()
     configureDesktopLyrics()
@@ -2017,7 +2018,6 @@ final class EchoNativeAppStore {
       pagesModel.equalizer.language = selection
     case "defaultPage": persistent.settings.defaultPage = selection
     case "appearanceBackground": persistent.settings.appearanceBackground = selection
-    case "appearancePattern": persistent.settings.appearancePattern = selection
     case "motionStyle": persistent.settings.motionStyle = selection
     case "themeColor": persistent.settings.themeColorHex = selection
     case "defaultLibrarySource": persistent.settings.defaultLibrarySource = selection; librarySource = selection; resetLibraryPosition()
@@ -2062,7 +2062,6 @@ final class EchoNativeAppStore {
 
   private func performSettingAction(_ payload: [String: Any]) {
     switch payload["key"] as? String {
-    case "resetTags": persistent.settings.audioTagVisibility = EchoNativeCoreSettings().audioTagVisibility; persist(); renderPages()
     case "rescanMetadata": Task { await refreshLocalLibrary() }
     case "clearLocalQueue": activeQueuePlaylistId = ""; queue.removeAll { $0.source == .local }; updateQueueModel(); persistQueue()
     case "clearRecent": persistent.recentTrackKeys = []; persistent.recentTracks = []; persist(); renderPages()
@@ -2070,63 +2069,86 @@ final class EchoNativeAppStore {
     }
   }
 
-  private func resetSetting(_ key: String) {
+  private func resetSettingsSection(_ section: String) {
     let defaults = EchoNativeCoreSettings()
-    switch key {
-    case "language": persistent.settings.language = defaults.language
-    case "defaultPage": persistent.settings.defaultPage = defaults.defaultPage
-    case "followSystemAppearance": persistent.settings.followSystemAppearance = defaults.followSystemAppearance
-    case "manualAppearance": persistent.settings.darkModeEnabled = defaults.darkModeEnabled
-    case "appearanceBackground": persistent.settings.appearanceBackground = defaults.appearanceBackground
-    case "appearancePattern": persistent.settings.appearancePattern = defaults.appearancePattern
-    case "themeColor": persistent.settings.themeColorHex = defaults.themeColorHex
-    case "customFont": persistent.settings.customFontName = defaults.customFontName
-    case "fontScale": persistent.settings.fontScale = defaults.fontScale
-    case "motionStyle": persistent.settings.motionStyle = defaults.motionStyle
-    case "artworkMotion": persistent.settings.artworkMotionEnabled = defaults.artworkMotionEnabled
-    case "backgroundMotion": persistent.settings.backgroundMotionEnabled = defaults.backgroundMotionEnabled
-    case "haptics": persistent.settings.hapticsEnabled = defaults.hapticsEnabled
-    case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = defaults.desktopLyricsEnabled
-    case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = defaults.desktopLyricsOnlyWhilePlaying
-    case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = defaults.desktopLyricsShowMetadata
-    case "desktopLyricsBackground": persistent.settings.desktopLyricsBackground = defaults.desktopLyricsBackground
-    case "desktopLyricsVisualizer": persistent.settings.desktopLyricsVisualizer = defaults.desktopLyricsVisualizer
-    case "desktopLyricsAnimation": persistent.settings.desktopLyricsAnimation = defaults.desktopLyricsAnimation
-    case "desktopLyricsTransitionAnimation": persistent.settings.desktopLyricsTransitionAnimation = defaults.desktopLyricsTransitionAnimation
-    case "desktopLyricsTimedReveal": persistent.settings.desktopLyricsTimedReveal = defaults.desktopLyricsTimedReveal
-    case "desktopLyricsRainbowGradient": persistent.settings.desktopLyricsRainbowGradient = defaults.desktopLyricsRainbowGradient
-    case "desktopLyricsSize": persistent.settings.desktopLyricsFontSize = defaults.desktopLyricsFontSize
-    case "desktopLyricsWidth": persistent.settings.desktopLyricsWidthScale = defaults.desktopLyricsWidthScale
-    case "desktopLyricsHeight": persistent.settings.desktopLyricsHeightScale = defaults.desktopLyricsHeightScale
-    case "desktopLyricsPosition": persistent.settings.desktopLyricsPosition = defaults.desktopLyricsPosition
-    case "eq":
+    switch section {
+    case "interface":
+      persistent.settings.language = defaults.language
+      persistent.settings.defaultPage = defaults.defaultPage
+      persistent.settings.followSystemAppearance = defaults.followSystemAppearance
+      persistent.settings.darkModeEnabled = defaults.darkModeEnabled
+    case "appearance":
+      persistent.settings.appearanceBackground = defaults.appearanceBackground
+      persistent.settings.themeColorHex = defaults.themeColorHex
+      persistent.settings.customFontName = defaults.customFontName
+      persistent.settings.fontScale = defaults.fontScale
+    case "motion":
+      persistent.settings.motionStyle = defaults.motionStyle
+      persistent.settings.hapticsEnabled = defaults.hapticsEnabled
+    case "desktopLyrics":
+      persistent.settings.desktopLyricsAnimation = defaults.desktopLyricsAnimation
+      persistent.settings.desktopLyricsBackground = defaults.desktopLyricsBackground
+      persistent.settings.desktopLyricsEnabled = defaults.desktopLyricsEnabled
+      persistent.settings.desktopLyricsFontSize = defaults.desktopLyricsFontSize
+      persistent.settings.desktopLyricsHeightScale = defaults.desktopLyricsHeightScale
+      persistent.settings.desktopLyricsOnlyWhilePlaying = defaults.desktopLyricsOnlyWhilePlaying
+      persistent.settings.desktopLyricsPosition = defaults.desktopLyricsPosition
+      persistent.settings.desktopLyricsRainbowGradient = defaults.desktopLyricsRainbowGradient
+      persistent.settings.desktopLyricsShowMetadata = defaults.desktopLyricsShowMetadata
+      persistent.settings.desktopLyricsSize = defaults.desktopLyricsSize
+      persistent.settings.desktopLyricsTimedReveal = defaults.desktopLyricsTimedReveal
+      persistent.settings.desktopLyricsTransitionAnimation = defaults.desktopLyricsTransitionAnimation
+      persistent.settings.desktopLyricsVisualizer = defaults.desktopLyricsVisualizer
+      persistent.settings.desktopLyricsWidthScale = defaults.desktopLyricsWidthScale
+    case "playback":
       persistent.settings.eqGains = defaults.eqGains
       persistent.settings.eqPreset = defaults.eqPreset
+      persistent.settings.loudnessEnabled = defaults.loudnessEnabled
+      persistent.settings.autoOpenLyricsForLocalTracks = defaults.autoOpenLyricsForLocalTracks
+      persistent.settings.showArtworkGlow = defaults.showArtworkGlow
+      persistent.settings.showPlayerOutputInMenu = defaults.showPlayerOutputInMenu
       playerModel.equalizer.gains = defaults.eqGains
       playerModel.equalizer.preset = defaults.eqPreset
       pagesModel.equalizer.gains = defaults.eqGains
       pagesModel.equalizer.preset = defaults.eqPreset
+      playerModel.eqEnabled = false
       audioEngine.setEq(gains: defaults.eqGains)
-    case "loudness": persistent.settings.loudnessEnabled = defaults.loudnessEnabled; audioEngine.setLoudness(defaults.loudnessEnabled)
-    case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = defaults.autoOpenLyricsForLocalTracks
-    case "artworkGlow": persistent.settings.showArtworkGlow = defaults.showArtworkGlow
-    case "playerOutputInMenu": persistent.settings.showPlayerOutputInMenu = defaults.showPlayerOutputInMenu
-    case "externalMetadataSearch": persistent.settings.externalMetadataEnabled = defaults.externalMetadataEnabled
-    case "externalMetadataSkipExisting": persistent.settings.externalMetadataSkipExisting = defaults.externalMetadataSkipExisting
-    case "externalSelectionMode": persistent.settings.externalDataSelectionMode = defaults.externalDataSelectionMode
-    case "lrcapi": persistent.settings.lrcApiExternalDataEnabled = defaults.lrcApiExternalDataEnabled
-    case "lrclib": persistent.settings.lrclibExternalDataEnabled = defaults.lrclibExternalDataEnabled
-    case "netease": persistent.settings.neteaseExternalDataEnabled = defaults.neteaseExternalDataEnabled
-    case "neteaseAccessMode": persistent.settings.neteaseAccessMode = defaults.neteaseAccessMode; persistent.settings.neteaseApiBaseUrl = defaults.neteaseApiBaseUrl; configureClients()
-    case "defaultLibrarySource": persistent.settings.defaultLibrarySource = defaults.defaultLibrarySource
-    case "defaultLocalView": persistent.settings.defaultLocalLibraryView = defaults.defaultLocalLibraryView
-    case "autoQueueImports": persistent.settings.autoQueueImportedLocalTracks = defaults.autoQueueImportedLocalTracks
-    case "confirmDelete": persistent.settings.confirmBeforeDeletingLocalTracks = defaults.confirmBeforeDeletingLocalTracks
-    case "showPowerampRemoteConnection": persistent.settings.showPowerampRemote = defaults.showPowerampRemote
-    default:
-      guard key.hasPrefix("audioTag.") else { return }
-      let tag = String(key.dropFirst(9))
-      persistent.settings.audioTagVisibility[tag] = defaults.audioTagVisibility[tag] ?? true
+      audioEngine.setLoudness(defaults.loudnessEnabled)
+    case "externalData":
+      persistent.settings.externalDataSelectionMode = defaults.externalDataSelectionMode
+      persistent.settings.externalMetadataEnabled = defaults.externalMetadataEnabled
+      persistent.settings.externalMetadataSkipExisting = defaults.externalMetadataSkipExisting
+      persistent.settings.lrcApiExternalDataEnabled = defaults.lrcApiExternalDataEnabled
+      persistent.settings.lrclibExternalDataEnabled = defaults.lrclibExternalDataEnabled
+      persistent.settings.neteaseAccessMode = defaults.neteaseAccessMode
+      persistent.settings.neteaseApiBaseUrl = defaults.neteaseApiBaseUrl
+      persistent.settings.neteaseExternalDataEnabled = defaults.neteaseExternalDataEnabled
+      metadataGeneration &+= 1
+      metadataTask?.cancel()
+      metadataTask = nil
+      metadataRetryTask?.cancel()
+      metadataRetryTask = nil
+      externalMetadataLoading = false
+      updateLoadingState()
+      clearExternalMetadataPicker()
+      resetLibraryArtworkLookup()
+      clearNeteaseQrLogin()
+      configureClients()
+    case "library":
+      persistent.settings.defaultLibrarySource = defaults.defaultLibrarySource
+      persistent.settings.defaultLocalLibraryView = defaults.defaultLocalLibraryView
+      persistent.settings.autoQueueImportedLocalTracks = defaults.autoQueueImportedLocalTracks
+      persistent.settings.confirmBeforeDeletingLocalTracks = defaults.confirmBeforeDeletingLocalTracks
+      librarySource = defaults.defaultLibrarySource
+      libraryView = defaults.defaultLocalLibraryView
+      resetLibraryPosition()
+    case "remote":
+      persistent.settings.showPowerampRemote = defaults.showPowerampRemote
+      if !defaults.showPowerampRemote, connectMode == "remote" { connectMode = "echo" }
+    case "audioTags":
+      persistent.settings.audioTagVisibility = defaults.audioTagVisibility
+      if let currentTrack { playerModel.tags = tags(for: currentTrack) }
+    default: return
     }
     applyAppearanceSettings()
     let settings = persistent.settings
@@ -3094,9 +3116,6 @@ final class EchoNativeAppStore {
     playerModel.appearanceImageUrl = appearanceBackgroundURL.flatMap {
       FileManager.default.fileExists(atPath: $0.path) ? $0.absoluteString : nil
     } ?? ""
-    playerModel.appearancePattern = settings.appearancePattern
-    playerModel.artworkMotionEnabled = settings.artworkMotionEnabled
-    playerModel.backgroundMotionEnabled = settings.backgroundMotionEnabled
     playerModel.customFontName = settings.customFontName
     playerModel.fontScale = settings.fontScale
     playerModel.hapticsEnabled = settings.hapticsEnabled
