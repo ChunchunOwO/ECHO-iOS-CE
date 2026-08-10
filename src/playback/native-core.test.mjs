@@ -208,7 +208,9 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /canvasWidth\(for: configuration\.widthScale\)/u);
   assert.match(desktopLyrics, /canvasHeight\(for: configuration\.heightScale\)/u);
   assert.match(desktopLyrics, /CIFilter\.gaussianBlur\(\)/u);
-  assert.match(desktopLyrics, /Timer\.scheduledTimer\(withTimeInterval: 1\.0 \/ 15\.0/u);
+  assert.match(desktopLyrics, /Timer\(timeInterval: 1\.0 \/ 30\.0/u);
+  assert.match(desktopLyrics, /RunLoop\.main\.add\(timer, forMode: \.common\)/u);
+  assert.match(desktopLyrics, /configuration\.visualizer != "off"/u);
   assert.doesNotMatch(desktopLyrics, /withTimeInterval: 0\.5/u);
   assert.match(desktopLyrics, /timescale: 30/u);
   assert.match(desktopLyrics, /previousLyric = currentLyric/u);
@@ -242,6 +244,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /themeColorHex/u);
   assert.match(player, /private var appBackground: some View/u);
   assert.match(payload, /Software default/u);
+  assert.match(payload, /Default light gold/u);
+  assert.match(payload, /Night purple/u);
   assert.match(store, /addRecent\(updated\)/u);
   assert.match(store, /lyrics = track\.externalLyrics \?\? ""/u);
   assert.match(store, /value\.artworkUrl = cached\.artworkUrl/u);
@@ -295,7 +299,9 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(player, /model\.repeatOne/u);
   assert.doesNotMatch(themedTab, /EchoNativeArtworkBackdrop\(/u);
   assert.match(appBackground, /activePage == "control" \|\| playerModel\.appearanceBackground == "artwork"/u);
-  assert.match(appBackground, /appearanceBackground == "custom"[\s\S]*echoThemeBackground/u);
+  assert.ok(appBackground.indexOf('echoThemeBackground') < appBackground.indexOf('EchoNativeArtworkBackdrop'));
+  assert.match(appBackground, /activePage != "control"[\s\S]*appearanceBackground == "custom"[\s\S]*appearanceImageUrl\.isEmpty/u);
+  assert.match(player, /ZStack \{\s+Color\.clear\s+if !stableUrl\.isEmpty/u);
   assert.match(appBackground, /EchoNativeSakuraBackdrop/u);
   assert.match(player, /private struct EchoNativeSakuraBackdrop/u);
   assert.doesNotMatch(player, /EchoNativeThemePattern/u);

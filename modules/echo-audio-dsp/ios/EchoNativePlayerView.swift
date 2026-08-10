@@ -524,7 +524,9 @@ private struct EchoNativeAppScreen: View {
   @ViewBuilder
   private var appBackground: some View {
     ZStack {
-      if playerModel.activePage == "control" || playerModel.appearanceBackground == "artwork" {
+      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
+      if (playerModel.activePage == "control" || playerModel.appearanceBackground == "artwork")
+        && !playerModel.artworkUrl.isEmpty {
         EchoNativeArtworkBackdrop(
           enabled: true,
           identity: "\(playerModel.title)::\(playerModel.artist)",
@@ -534,7 +536,9 @@ private struct EchoNativeAppScreen: View {
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
-      } else if playerModel.appearanceBackground == "custom" {
+      } else if playerModel.activePage != "control"
+        && playerModel.appearanceBackground == "custom"
+        && !playerModel.appearanceImageUrl.isEmpty {
         EchoNativeArtworkBackdrop(
           enabled: true,
           identity: playerModel.appearanceImageUrl,
@@ -543,8 +547,6 @@ private struct EchoNativeAppScreen: View {
         )
         .ignoresSafeArea()
         .allowsHitTesting(false)
-      } else {
-        echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       }
       EchoNativeSakuraBackdrop(color: echoColor(hex: playerModel.themeColorHex))
         .ignoresSafeArea()
@@ -1484,7 +1486,7 @@ private struct EchoNativeArtworkBackdrop: View {
   var body: some View {
     GeometryReader { geometry in
       ZStack {
-        echoWarmBackground
+        Color.clear
 
         if !stableUrl.isEmpty {
           artworkLayer(url: stableUrl, size: geometry.size, showsPlaceholder: false)

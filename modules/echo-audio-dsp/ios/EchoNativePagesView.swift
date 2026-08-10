@@ -2508,51 +2508,54 @@ struct EchoNativePagesScreen: View {
     case "color":
       VStack(alignment: .leading, spacing: 10) {
         settingHeader(row)
-        HStack(spacing: 8) {
-          ForEach(row.options) { option in
-            let currentColor = currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24"
-            let selected = option.id == "default"
-              ? currentColor == "AC1F24"
-              : option.id == currentColor && currentColor != "AC1F24"
-            Button {
-              let selection = option.id == "default" ? "AC1F24" : option.id
-              updateSettingRow(row.id) { $0.selection = selection }
-              onAction(["action": "settingSelect", "key": row.id, "selection": selection])
-            } label: {
-              Circle()
-                .fill(echoColor(hex: option.id == "default" ? "AC1F24" : option.id))
-                .frame(width: 30, height: 30)
-                .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 1))
-                .overlay(Circle().stroke(echoInk.opacity(selected ? 0.42 : 0.16), lineWidth: 1))
-                .overlay {
-                  if option.id == "default" {
-                    Image(systemName: "arrow.counterclockwise")
-                      .font(echoFont(size: 11, weight: .bold))
-                      .foregroundColor(.white)
-                      .shadow(color: .black.opacity(0.25), radius: 2)
-                  }
-                }
-                .scaleEffect(selected ? 1 : 0.88)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(option.label)
-            .accessibilityAddTraits(selected ? .isSelected : [])
-          }
-          ColorPicker(
-            "",
-            selection: Binding(
-              get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24") },
-              set: { color in
-                guard let selection = echoHex(color: color) else { return }
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 8) {
+            ForEach(row.options) { option in
+              let currentColor = currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24"
+              let selected = option.id == "default"
+                ? currentColor == "AC1F24"
+                : option.id == currentColor && currentColor != "AC1F24"
+              Button {
+                let selection = option.id == "default" ? "AC1F24" : option.id
                 updateSettingRow(row.id) { $0.selection = selection }
                 onAction(["action": "settingSelect", "key": row.id, "selection": selection])
+              } label: {
+                Circle()
+                  .fill(echoColor(hex: option.id == "default" ? "AC1F24" : option.id))
+                  .frame(width: 30, height: 30)
+                  .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 1))
+                  .overlay(Circle().stroke(echoInk.opacity(selected ? 0.42 : 0.16), lineWidth: 1))
+                  .overlay {
+                    if option.id == "default" {
+                      Image(systemName: "arrow.counterclockwise")
+                        .font(echoFont(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.25), radius: 2)
+                    }
+                  }
+                  .scaleEffect(selected ? 1 : 0.88)
               }
-            ),
-            supportsOpacity: false
-          )
-          .labelsHidden()
-          .frame(width: 32, height: 32)
-          .accessibilityLabel(model.payload?.language == "en" ? "Custom theme color" : "自定义主题色")
+              .buttonStyle(.plain)
+              .accessibilityLabel(option.label)
+              .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+            ColorPicker(
+              "",
+              selection: Binding(
+                get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24") },
+                set: { color in
+                  guard let selection = echoHex(color: color) else { return }
+                  updateSettingRow(row.id) { $0.selection = selection }
+                  onAction(["action": "settingSelect", "key": row.id, "selection": selection])
+                }
+              ),
+              supportsOpacity: false
+            )
+            .labelsHidden()
+            .frame(width: 32, height: 32)
+            .accessibilityLabel(model.payload?.language == "en" ? "Custom theme color" : "自定义主题色")
+          }
+          .padding(.vertical, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
       }
