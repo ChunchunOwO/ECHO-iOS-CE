@@ -298,10 +298,13 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(player, /@Published var lyricTexts:/u);
   assert.doesNotMatch(player, /model\.repeatOne/u);
   assert.doesNotMatch(themedTab, /EchoNativeArtworkBackdrop\(/u);
+  assert.match(themedTab, /appBackground/u);
   assert.match(appBackground, /activePage == "control" \|\| playerModel\.appearanceBackground == "artwork"/u);
   assert.ok(appBackground.indexOf('echoThemeBackground') < appBackground.indexOf('EchoNativeArtworkBackdrop'));
   assert.match(appBackground, /activePage != "control"[\s\S]*appearanceBackground == "custom"[\s\S]*appearanceImageUrl\.isEmpty/u);
   assert.match(player, /ZStack \{\s+Color\.clear\s+if !stableUrl\.isEmpty/u);
+  assert.match(player, /@Binding var stableIdentity: String/u);
+  assert.match(player, /stableIdentity: \$stableArtworkIdentity/u);
   assert.match(appBackground, /EchoNativeSakuraBackdrop/u);
   assert.match(player, /private struct EchoNativeSakuraBackdrop/u);
   assert.doesNotMatch(player, /EchoNativeThemePattern/u);

@@ -477,10 +477,13 @@ private struct EchoNativeAppScreen: View {
   @ObservedObject var pagesModel: EchoNativePagesModel
   let onAction: ([String: Any]) -> Void
   @State private var showingSplash = true
+  @State private var stableArtworkIdentity = ""
+  @State private var stableArtworkUrl = ""
+  @State private var stableCustomIdentity = ""
+  @State private var stableCustomUrl = ""
 
   var body: some View {
     ZStack {
-      appBackground
       Group {
         #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
@@ -530,7 +533,9 @@ private struct EchoNativeAppScreen: View {
         EchoNativeArtworkBackdrop(
           enabled: true,
           identity: "\(playerModel.title)::\(playerModel.artist)",
-          urlString: playerModel.artworkUrl
+          urlString: playerModel.artworkUrl,
+          stableIdentity: $stableArtworkIdentity,
+          stableUrl: $stableArtworkUrl
         ) {
           onAction(["action": "artworkError", "url": playerModel.artworkUrl])
         }
@@ -543,6 +548,8 @@ private struct EchoNativeAppScreen: View {
           enabled: true,
           identity: playerModel.appearanceImageUrl,
           urlString: playerModel.appearanceImageUrl,
+          stableIdentity: $stableCustomIdentity,
+          stableUrl: $stableCustomUrl,
           onError: {}
         )
         .ignoresSafeArea()
@@ -634,8 +641,12 @@ private struct EchoNativeAppScreen: View {
   private func themedTab<Content: View>(
     @ViewBuilder content: () -> Content
   ) -> some View {
-    content()
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    ZStack {
+      appBackground
+      content()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   private func title(_ page: String) -> String {
@@ -1477,11 +1488,11 @@ private struct EchoNativeArtworkBackdrop: View {
   let enabled: Bool
   let identity: String
   let urlString: String
+  @Binding var stableIdentity: String
+  @Binding var stableUrl: String
   let onError: () -> Void
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.colorScheme) private var colorScheme
-  @State private var stableIdentity = ""
-  @State private var stableUrl = ""
 
   var body: some View {
     GeometryReader { geometry in
