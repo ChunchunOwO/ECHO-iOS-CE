@@ -16,10 +16,12 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     var fontName = ""
     var fontSize = 32.0
     var heightScale = 0.36
+    var language = "zh"
     var onlyWhilePlaying = true
     var position = "bottom"
     var rainbowGradient = false
     var showMetadata = true
+    var themeColorHex = "AC1F24"
     var timedReveal = false
     var transitionAnimation = false
     var visualizer = "off"
@@ -185,14 +187,18 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     stopPresentation()
   }
 
-  private var hasContent: Bool {
-    !currentLyric.isEmpty || !title.isEmpty
+  private var hasTrack: Bool {
+    !trackKey.isEmpty || !currentLyric.isEmpty || !title.isEmpty
   }
 
   private var shouldPresent: Bool {
     configuration.enabled
-      && hasContent
-      && (!configuration.onlyWhilePlaying || isPlaying)
+      && (!configuration.onlyWhilePlaying || isPlaying || !hasTrack)
+  }
+
+  private var needsContinuousRendering: Bool {
+    if !hasRenderedFrame || pictureInPictureController?.isPictureInPictureActive != true { return true }
+    return hasTrack && (isPlaying || (configuration.transitionAnimation && CACurrentMediaTime() - lyricTransitionStartedAt < 0.35))
   }
 
   private func refreshPresentation() {
@@ -200,7 +206,12 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       stopPresentation()
       return
     }
-    startRenderTimer()
+    if needsContinuousRendering {
+      startRenderTimer()
+    } else {
+      renderTimer?.invalidate()
+      renderTimer = nil
+    }
     renderFrame()
     startIfNeeded()
   }
@@ -221,8 +232,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private func startIfNeeded() {
     guard configuration.enabled,
       !userDismissed,
-      hasContent,
-      !(configuration.onlyWhilePlaying && !isPlaying),
+      shouldPresent,
       let pictureInPictureController,
       !pictureInPictureController.isPictureInPictureActive,
       !startRequested,
@@ -259,13 +269,14 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private func startRenderTimer() {
     guard renderTimer == nil else { return }
-    renderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+    renderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.refreshPresentation() }
     }
+    renderTimer?.tolerance = 0.025
   }
 
   private func renderFrame() {
-    guard hasContent else { return }
+    guard shouldPresent else { return }
     if displayLayer.status == .failed {
       pictureInPictureController?.invalidatePlaybackState()
       displayLayer.flushAndRemoveImage()
@@ -365,6 +376,10 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     let bounds = CGRect(x: 0, y: 0, width: width, height: height)
     let transitionProgress = min(1, max(0, (CACurrentMediaTime() - lyricTransitionStartedAt) / 0.28))
     drawBackground(in: context, bounds: bounds)
+    guard hasTrack else {
+      drawEmptyState(in: context, bounds: bounds)
+      return
+    }
     drawVisualizer(in: context, bounds: bounds)
     let inset = max(18, min(52, CGFloat(width) * 0.055))
     let coverSize = max(72, min(CGFloat(height) * 0.74, CGFloat(width) * 0.42))
@@ -383,7 +398,9 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.translateBy(x: 0, y: CGFloat(height))
     context.scaleBy(x: 1, y: -1)
     let textPanel = CGRect(x: text.minX, y: CGFloat(height) - text.maxY, width: text.width, height: text.height)
-    let currentText = currentLyric.isEmpty ? "暂无歌曲数据" : currentLyric
+    let currentText = currentLyric.isEmpty
+      ? (configuration.language == "en" ? "No lyric data" : "暂无歌曲数据")
+      : currentLyric
     let metadata = [title, artist].filter { !$0.isEmpty }.joined(separator: "  /  ")
     let metadataFont = displayFont(size: min(24, max(14, coverSize * 0.11)), weight: .semibold)
     let metadataHeight: CGFloat = configuration.showMetadata && !metadata.isEmpty ? metadataFont.lineHeight + 4 : 0
@@ -461,6 +478,21 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       )
     }
     context.restoreGState()
+    context.restoreGState()
+  }
+
+  private func drawEmptyState(in context: CGContext, bounds: CGRect) {
+    context.saveGState()
+    context.translateBy(x: 0, y: bounds.height)
+    context.scaleBy(x: 1, y: -1)
+    let font = displayFont(size: min(30, max(20, bounds.height * 0.12)), weight: .bold)
+    drawCenteredText(
+      configuration.language == "en" ? "No song is playing" : "没有歌曲正在播放",
+      in: bounds.insetBy(dx: max(24, bounds.width * 0.08), dy: 0),
+      font: font,
+      color: .white.withAlphaComponent(0.9),
+      context: context
+    )
     context.restoreGState()
   }
 
@@ -553,6 +585,11 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private func drawBackground(in context: CGContext, bounds: CGRect) {
+    if !hasTrack {
+      drawThemeBackground(in: context, bounds: bounds)
+      drawSakuraScattering(in: context, bounds: bounds)
+      return
+    }
     if configuration.background == "custom", let image = importedBackgroundImage?.cgImage {
       drawAspectFill(image, in: bounds, context: context)
       context.setFillColor(UIColor.black.withAlphaComponent(0.2).cgColor)
@@ -565,16 +602,60 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       context.fill(bounds)
       return
     }
+    drawThemeBackground(in: context, bounds: bounds)
+  }
+
+  private func drawThemeBackground(in context: CGContext, bounds: CGRect) {
+    let base = themeUIColor
+    var hue: CGFloat = 0
+    var saturation: CGFloat = 0
+    var brightness: CGFloat = 0
+    var alpha: CGFloat = 1
+    base.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
     let gradient = CGGradient(
       colorsSpace: CGColorSpaceCreateDeviceRGB(),
       colors: [
-        UIColor(red: 0.11, green: 0.04, blue: 0.08, alpha: 1).cgColor,
-        UIColor(red: 0.46, green: 0.06, blue: 0.09, alpha: 1).cgColor,
+        UIColor(hue: hue, saturation: min(1, saturation * 1.08), brightness: max(0.12, brightness * 0.42), alpha: 1).cgColor,
+        UIColor(hue: hue, saturation: min(1, saturation * 1.02), brightness: max(0.2, brightness * 0.88), alpha: 1).cgColor,
       ] as CFArray,
       locations: [0, 1]
     )
     if let gradient {
       context.drawLinearGradient(gradient, start: CGPoint(x: bounds.minX, y: bounds.minY), end: CGPoint(x: bounds.maxX, y: bounds.maxY), options: [])
+    }
+  }
+
+  private var themeUIColor: UIColor {
+    let value = UInt64(configuration.themeColorHex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) ?? 0xAC1F24
+    return UIColor(
+      red: CGFloat((value >> 16) & 0xFF) / 255,
+      green: CGFloat((value >> 8) & 0xFF) / 255,
+      blue: CGFloat(value & 0xFF) / 255,
+      alpha: 1
+    )
+  }
+
+  private func drawSakuraScattering(in context: CGContext, bounds: CGRect) {
+    let points: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+      (0.12, 0.18, 0.7, 0.8), (0.28, 0.76, -0.4, 0.62), (0.48, 0.23, 0.2, 0.48),
+      (0.68, 0.72, -0.7, 0.7), (0.86, 0.2, 0.45, 0.56), (0.9, 0.84, -0.2, 0.42),
+    ]
+    let petalColor = themeUIColor.withAlphaComponent(0.36)
+    for (x, y, angle, scale) in points {
+      let radius = max(8, min(bounds.width, bounds.height) * 0.045 * scale)
+      context.saveGState()
+      context.translateBy(x: bounds.width * x, y: bounds.height * y)
+      context.rotate(by: angle)
+      for index in 0..<5 {
+        context.saveGState()
+        context.rotate(by: CGFloat(index) * (.pi * 2 / 5))
+        context.setFillColor(petalColor.cgColor)
+        context.fillEllipse(in: CGRect(x: -radius * 0.32, y: -radius * 0.95, width: radius * 0.64, height: radius * 0.9))
+        context.restoreGState()
+      }
+      context.setFillColor(UIColor.white.withAlphaComponent(0.62).cgColor)
+      context.fillEllipse(in: CGRect(x: -radius * 0.18, y: -radius * 0.18, width: radius * 0.36, height: radius * 0.36))
+      context.restoreGState()
     }
   }
 

@@ -23,6 +23,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   const nativeEntry = app.slice(app.indexOf('function NativeEchoApp'), app.indexOf('export default function App'));
   const appEntry = app.slice(app.indexOf('export default function App'));
   const tick = store.slice(store.indexOf('private func tickPlayback()'), store.indexOf('private func updateEstimatedRemotePosition'));
+  const appBackgroundStart = player.indexOf('private var appBackground');
+  const selectionStart = player.indexOf('private var selection');
   const themedTabStart = player.indexOf('private func themedTab');
   const titleStart = player.indexOf('private func title');
   const playerLayoutStart = player.indexOf('private func playerLayout');
@@ -55,6 +57,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.ok(collectionsStart >= 0 && artistNamesStart > collectionsStart);
   assert.ok(albumArtworkStart >= 0 && normalizedMetadataStart > albumArtworkStart);
   const themedTab = player.slice(themedTabStart, titleStart);
+  const appBackground = player.slice(appBackgroundStart, selectionStart);
   const playerLayout = player.slice(playerLayoutStart, lyricsLayoutStart);
   const lyricsScroller = player.slice(lyricsScrollerStart, lyricAccessibilityStart);
   const collectionsForCurrentView = payload.slice(collectionsStart, artistNamesStart);
@@ -205,7 +208,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /canvasWidth\(for: configuration\.widthScale\)/u);
   assert.match(desktopLyrics, /canvasHeight\(for: configuration\.heightScale\)/u);
   assert.match(desktopLyrics, /CIFilter\.gaussianBlur\(\)/u);
-  assert.match(desktopLyrics, /Timer\.scheduledTimer\(withTimeInterval: 1\.0 \/ 30\.0/u);
+  assert.match(desktopLyrics, /Timer\.scheduledTimer\(withTimeInterval: 1\.0 \/ 15\.0/u);
   assert.doesNotMatch(desktopLyrics, /withTimeInterval: 0\.5/u);
   assert.match(desktopLyrics, /timescale: 30/u);
   assert.match(desktopLyrics, /previousLyric = currentLyric/u);
@@ -235,6 +238,10 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /case "pulse":/u);
   assert.match(desktopLyrics, /private var visualizationLevel/u);
   assert.match(desktopLyrics, /private static let artworkCache/u);
+  assert.match(desktopLyrics, /没有歌曲正在播放/u);
+  assert.match(desktopLyrics, /themeColorHex/u);
+  assert.match(player, /private var appBackground: some View/u);
+  assert.match(payload, /Software default/u);
   assert.match(store, /addRecent\(updated\)/u);
   assert.match(store, /lyrics = track\.externalLyrics \?\? ""/u);
   assert.match(store, /value\.artworkUrl = cached\.artworkUrl/u);
@@ -286,10 +293,10 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(store, /case "settingNumber": updateSettingNumber/u);
   assert.doesNotMatch(player, /@Published var lyricTexts:/u);
   assert.doesNotMatch(player, /model\.repeatOne/u);
-  assert.equal((player.match(/themedTab\(playerBackground: true\)/gu) ?? []).length, 2);
-  assert.match(themedTab, /EchoNativeArtworkBackdrop\(/u);
-  assert.match(themedTab, /appearanceBackground == "artwork"[\s\S]*appearanceBackground == "custom"[\s\S]*echoThemeBackground/u);
-  assert.match(themedTab, /EchoNativeSakuraBackdrop/u);
+  assert.doesNotMatch(themedTab, /EchoNativeArtworkBackdrop\(/u);
+  assert.match(appBackground, /activePage == "control" \|\| playerModel\.appearanceBackground == "artwork"/u);
+  assert.match(appBackground, /appearanceBackground == "custom"[\s\S]*echoThemeBackground/u);
+  assert.match(appBackground, /EchoNativeSakuraBackdrop/u);
   assert.match(player, /private struct EchoNativeSakuraBackdrop/u);
   assert.doesNotMatch(player, /EchoNativeThemePattern/u);
   assert.doesNotMatch(lyricsScroller, /scrollClipDisabled/u);
@@ -348,7 +355,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(store, /case "playback":[\s\S]*playerModel\.eqEnabled = false/u);
   assert.match(store, /case "audioTags":[\s\S]*playerModel\.tags = tags\(for: currentTrack\)/u);
   assert.doesNotMatch(pages, /row\.resettable/u);
-  assert.match(desktopLyrics, /currentLyric\.isEmpty \? "暂无歌曲数据"/u);
+  assert.match(desktopLyrics, /currentLyric\.isEmpty[\s\S]*暂无歌曲数据/u);
   assert.match(desktopLyrics, /let bars: \[CGFloat\]/u);
   assert.ok(moreControls.indexOf('trackFavoriteCurrent') < moreControls.indexOf('Divider()'));
   assert.ok(moreControls.indexOf('desktopLyricsEnabled') < moreControls.indexOf('externalMetadataRefresh'));

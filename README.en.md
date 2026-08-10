@@ -5,7 +5,7 @@
 <h1 align="center">ECHO iPhone</h1>
 
 <p align="center">
-  An independent iPhone music player that can connect to <a href="https://github.com/Moekotori/ECHO">ECHO NEXT</a> through EchoLink and also play local music on the phone.
+  An independent music player for iPhone with EchoLink connectivity to <a href="https://github.com/Moekotori/ECHO">ECHO NEXT</a>.
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 
 > This project is positioned as an independent music player. EchoLink is one source for connection, control, and streaming, and upstream compatibility will continue to be synchronized here.
 
-> If ECHO NEXT releases an official iOS client, I will mark it in this project and stop updating this repository.
+> If ECHO NEXT releases an official iOS client, I will note it in this project.
 
 > This is my first project, so it may be poorly made or even abandoned in the future. The main purpose of this project is to prove that Windows can complete the full workflow of making an iOS app, except signing and publishing, and to make it more convenient for myself to use ECHO on iOS. Thank you for your understanding <3
 
@@ -30,9 +30,9 @@ Version 0.5.0 moves the main pages to SwiftUI and adds native audio DSP. Local p
 
 ## Features
 
-- Playback outputs: Local, Media, Control, and Stream can be switched from the playback page.
+- Playback outputs: local playback, media playback, desktop control, and iPhone streaming can be switched in one place.
 - Local library: import, scan, favorites, recently played, local queue, and imported LRC lyrics.
-- Multiple library sources: All, ECHO, Local, and Media. The local library supports songs, albums, artists, formats, favorites, and recent views.
+- Multiple library sources: All, ECHO, Local, and Streaming. The local library supports songs, albums, artists, formats, favorites, and recent views.
 - NetEase Cloud Music: direct Web API access or a self-hosted service, with QR sign-in, profile, playlists, search, and playback.
 - Global search across ECHO and local tracks, albums, and artists.
 - Editable playlists: create, rename, delete, favorite, pin, and add tracks from ECHO or the local library.
