@@ -432,7 +432,13 @@ public final class EchoNativeAppView: ExpoView {
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     clipsToBounds = true
+    backgroundColor = UIColor { traits in
+      traits.userInterfaceStyle == .dark
+        ? UIColor(red: 0.13, green: 0.09, blue: 0.13, alpha: 1)
+        : UIColor(red: 0.97, green: 0.79, blue: 0.73, alpha: 1)
+    }
     hostingController.view.backgroundColor = .clear
+    hostingController.view.isOpaque = false
     hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     appearanceCancellable = store.playerModel.$followSystemAppearance
       .combineLatest(store.playerModel.$darkModeEnabled)
@@ -484,6 +490,7 @@ private struct EchoNativeAppScreen: View {
 
   var body: some View {
     ZStack {
+      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       Group {
         #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
@@ -1497,7 +1504,7 @@ private struct EchoNativeArtworkBackdrop: View {
   var body: some View {
     GeometryReader { geometry in
       ZStack {
-        Color.clear
+        echoWarmBackground
 
         if !stableUrl.isEmpty {
           artworkLayer(url: stableUrl, size: geometry.size, showsPlaceholder: false)
