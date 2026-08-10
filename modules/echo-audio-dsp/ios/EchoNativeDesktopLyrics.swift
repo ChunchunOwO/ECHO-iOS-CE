@@ -39,6 +39,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private var pictureInPictureController: AVPictureInPictureController?
   private var pictureInPicturePossibleObservation: NSKeyValueObservation?
   private var renderTimer: Timer?
+  private var renderTimerInterval = 0.0
   private var configuration = Configuration()
   private var importedBackgroundImage: UIImage?
   private var artworkImage: UIImage?
@@ -213,12 +214,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       stopPresentation()
       return
     }
-    if needsContinuousRendering {
-      startRenderTimer()
-    } else {
-      renderTimer?.invalidate()
-      renderTimer = nil
-    }
+    startRenderTimer(interval: needsContinuousRendering ? 1.0 / 30.0 : 0.5)
     renderFrame()
     startIfNeeded()
   }
@@ -226,6 +222,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   private func stopPresentation() {
     renderTimer?.invalidate()
     renderTimer = nil
+    renderTimerInterval = 0
     if pictureInPictureController?.isPictureInPictureActive == true {
       programmaticStopPending = true
       pictureInPictureController?.stopPictureInPicture()
@@ -274,12 +271,14 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     try? session.setActive(true)
   }
 
-  private func startRenderTimer() {
-    guard renderTimer == nil else { return }
-    let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+  private func startRenderTimer(interval: TimeInterval) {
+    if renderTimer != nil, abs(renderTimerInterval - interval) < 0.001 { return }
+    renderTimer?.invalidate()
+    renderTimerInterval = interval
+    let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.refreshPresentation() }
     }
-    timer.tolerance = 1.0 / 120.0
+    timer.tolerance = interval >= 0.5 ? 0.05 : 1.0 / 120.0
     RunLoop.main.add(timer, forMode: .common)
     renderTimer = timer
   }
@@ -330,7 +329,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     else { return nil }
 
     var timing = CMSampleTimingInfo(
-      duration: CMTime(value: 1, timescale: 30),
+      duration: CMTime(seconds: max(1.0 / 30.0, renderTimerInterval * 2), preferredTimescale: 600),
       presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
       decodeTimeStamp: .invalid
     )

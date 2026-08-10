@@ -192,6 +192,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(player, /\.blur\(radius: 14, opaque: true\)/u);
   assert.match(player, /No song is playing/u);
   assert.match(player, /hostingController\.overrideUserInterfaceStyle = style/u);
+  assert.match(player, /backgroundColor = UIColor \{ traits in/u);
+  assert.match(player, /hostingController\.view\.isOpaque = false/u);
   assert.match(player, /@Published var lyricLines:/u);
   assert.match(player, /ForEach\(Array\(model\.lyricLines\.enumerated\(\)\), id: \\.offset\)/u);
   assert.doesNotMatch(player, /EchoNativeDesktopLyricsOverlay/u);
@@ -208,11 +210,13 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /canvasWidth\(for: configuration\.widthScale\)/u);
   assert.match(desktopLyrics, /canvasHeight\(for: configuration\.heightScale\)/u);
   assert.match(desktopLyrics, /CIFilter\.gaussianBlur\(\)/u);
-  assert.match(desktopLyrics, /Timer\(timeInterval: 1\.0 \/ 30\.0/u);
+  assert.match(desktopLyrics, /startRenderTimer\(interval: needsContinuousRendering \? 1\.0 \/ 30\.0 : 0\.5\)/u);
+  assert.match(desktopLyrics, /Timer\(timeInterval: interval/u);
   assert.match(desktopLyrics, /RunLoop\.main\.add\(timer, forMode: \.common\)/u);
+  assert.match(desktopLyrics, /renderTimerInterval \* 2/u);
   assert.match(desktopLyrics, /configuration\.visualizer != "off"/u);
   assert.doesNotMatch(desktopLyrics, /withTimeInterval: 0\.5/u);
-  assert.match(desktopLyrics, /timescale: 30/u);
+  assert.match(desktopLyrics, /preferredTimescale: 600/u);
   assert.match(desktopLyrics, /previousLyric = currentLyric/u);
   assert.match(desktopLyrics, /drawCover\(in: cover/u);
   assert.match(desktopLyrics, /artworkBackgroundImage/u);
@@ -302,7 +306,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(appBackground, /activePage == "control" \|\| playerModel\.appearanceBackground == "artwork"/u);
   assert.ok(appBackground.indexOf('echoThemeBackground') < appBackground.indexOf('EchoNativeArtworkBackdrop'));
   assert.match(appBackground, /activePage != "control"[\s\S]*appearanceBackground == "custom"[\s\S]*appearanceImageUrl\.isEmpty/u);
-  assert.match(player, /ZStack \{\s+Color\.clear\s+if !stableUrl\.isEmpty/u);
+  assert.match(player, /ZStack \{\s+echoWarmBackground\s+if !stableUrl\.isEmpty/u);
   assert.match(player, /@Binding var stableIdentity: String/u);
   assert.match(player, /stableIdentity: \$stableArtworkIdentity/u);
   assert.match(appBackground, /EchoNativeSakuraBackdrop/u);
