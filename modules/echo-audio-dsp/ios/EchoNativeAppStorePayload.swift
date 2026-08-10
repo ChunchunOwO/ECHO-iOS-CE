@@ -687,7 +687,7 @@ extension EchoNativeAppStore {
     let defaultSourceUnavailable = (settings.defaultLibrarySource == "echo" && !persistent.echoConnection.enabled)
       || (settings.defaultLibrarySource == "remote" && !persistent.powerampConnection.enabled)
     let defaultLibrarySource = defaultSourceUnavailable ? "local" : settings.defaultLibrarySource
-    let appearanceSection = section("appearance", localized("Appearance", "外观"), localized("Background, theme color, pattern, and typography", "背景、主题色、图案与字体"), "paintpalette.fill", [
+    let appearanceSection = section("appearance", localized("Appearance", "外观"), localized("Background, theme color, and typography", "背景、主题色与字体"), "paintpalette.fill", [
       picker("appearanceBackground", localized("App background", "软件背景"), localized("Use the current artwork blur, an imported image, or the theme color.", "使用当前封面模糊、导入图片或主题色背景。"), settings.appearanceBackground, [
         option("artwork", localized("Artwork blur", "封面模糊")), option("custom", localized("Imported image", "导入图片")), option("theme", localized("Theme color", "主题色")),
       ]),
@@ -697,19 +697,13 @@ extension EchoNativeAppStore {
         option("2869A8", localized("Blue", "海蓝")), option("76509B", localized("Iris", "鸢尾紫")),
         option("C45F35", localized("Coral", "珊瑚橙")),
       ]),
-      picker("appearancePattern", localized("Background pattern", "背景小图案"), localized("Adds a restrained motif over theme backgrounds.", "在主题色背景上叠加克制的小图案。"), settings.appearancePattern, [
-        option("none", localized("None", "无")), option("sakura", localized("Sakura", "樱花")),
-        option("waves", localized("Waves", "波纹")), option("dots", localized("Dots", "圆点")),
-      ]),
       font("customFont", localized("Custom font", "自定义字体"), localized("Import a TTF or OTF font file.", "导入 TTF 或 OTF 字体文件。"), settings.customFontName),
       slider("fontScale", localized("App text size", "软件字号"), localized("Adjust text throughout the app.", "调整软件内的整体字号。"), settings.fontScale, min: 0.85, max: 1.25, step: 0.05),
     ])
-    let motionSection = section("motion", localized("Motion effects", "动态效果"), localized("Optional feedback and movement", "集中管理可选的反馈与动效"), "sparkles", [
-      picker("motionStyle", localized("Motion style", "动效风格"), localized("Choose no motion, restrained motion, or fluid motion.", "选择关闭、轻柔或流畅动效。"), settings.motionStyle, [
-        option("off", localized("Off", "关闭")), option("subtle", localized("Subtle", "轻柔")), option("fluid", localized("Fluid", "流畅")),
+    let motionSection = section("motion", localized("Motion and feedback", "动效与反馈"), localized("Visible artwork movement and tactile feedback", "直观的封面动效与触感反馈"), "sparkles", [
+      picker("motionStyle", localized("Artwork motion", "封面动效"), localized("Choose a clearly visible movement level for the playing artwork.", "选择播放封面直观可见的动态强度。"), settings.motionStyle, [
+        option("off", localized("Off", "关闭")), option("subtle", localized("Gentle", "轻柔")), option("fluid", localized("Lively", "明显")),
       ]),
-      toggle("artworkMotion", localized("Artwork motion", "封面动效"), localized("Adds gentle breathing motion to the playback artwork.", "为播放封面增加轻微呼吸动效。"), settings.artworkMotionEnabled, disabled: settings.motionStyle == "off"),
-      toggle("backgroundMotion", localized("Background motion", "背景动效"), localized("Moves background patterns slowly without affecting controls.", "缓慢移动背景图案，不影响控件操作。"), settings.backgroundMotionEnabled, disabled: settings.motionStyle == "off"),
       toggle("haptics", localized("Selection haptics", "选择触感"), localized("Adds light feedback when switching pages.", "切换页面时提供轻触反馈。"), settings.hapticsEnabled),
     ])
     let desktopLyricsSection = section("desktopLyrics", localized("Desktop lyrics", "桌面歌词"), localized("Native Picture in Picture lyrics with artwork and line transitions.", "带封面与逐句动效的原生画中画歌词。"), "quote.bubble.fill", [
@@ -786,7 +780,7 @@ extension EchoNativeAppStore {
         action("rescanMetadata", localized("Rescan metadata", "重新扫描元数据"), localized("Rebuilds local tags and artwork.", "重新读取本地标签与封面。"), disabled: localBusy),
         action("clearLocalQueue", localized("Clear local queue", "清空本地队列"), localized("Removes local tracks from the queue.", "从播放队列移除本地歌曲。"), disabled: queue.allSatisfy { $0.source != .local }),
         action("clearRecent", localized("Clear recent", "清空最近播放"), localized("Clears local playback history.", "清除本机播放历史。"), disabled: persistent.recentTrackKeys.isEmpty),
-      ]),
+      ], resettable: false),
     ]
     return ["sections": sections, "subtitle": localized("Settings are stored on this iPhone.", "设置保存在此 iPhone 的个人数据中。")]
   }
@@ -797,15 +791,13 @@ extension EchoNativeAppStore {
       ("bitrate", "Bitrate", "码率"), ("output", "Output", "输出模式"), ("source", "Source", "来源"),
       ("streamable", "Streamable", "可串流"), ("duration", "Duration", "时长"),
     ]
-    var rows = values.map { key, english, chinese in
+    return values.map { key, english, chinese in
       toggle("audioTag.\(key)", localized(english, chinese), localized("Show this tag when available.", "可用时显示此标签。"), persistent.settings.audioTagVisibility[key] != false)
     }
-    rows.append(action("resetTags", localized("Reset tags", "重置标签"), localized("Restores the default tag selection.", "恢复默认标签选择。")))
-    return rows
   }
 
-  private func section(_ id: String, _ title: String, _ description: String, _ symbol: String, _ rows: [[String: Any]]) -> [String: Any] {
-    ["description": description, "id": id, "rows": rows, "summary": "\(rows.count)", "symbol": symbol, "title": title]
+  private func section(_ id: String, _ title: String, _ description: String, _ symbol: String, _ rows: [[String: Any]], resettable: Bool = true) -> [String: Any] {
+    ["description": description, "id": id, "resettable": resettable, "rows": rows, "symbol": symbol, "title": title]
   }
 
   private func row(
@@ -823,7 +815,7 @@ extension EchoNativeAppStore {
     selection: Any = NSNull(),
     disabled: Bool = false
   ) -> [String: Any] {
-    ["boolValue": boolValue, "description": description, "disabled": disabled, "id": id, "kind": kind, "maximumValue": maximumValue, "minimumValue": minimumValue, "numberValue": numberValue, "options": options, "resettable": ["color", "eq", "font", "picker", "slider", "toggle"].contains(kind), "selection": selection, "stepValue": stepValue, "title": title, "value": value]
+    ["boolValue": boolValue, "description": description, "disabled": disabled, "id": id, "kind": kind, "maximumValue": maximumValue, "minimumValue": minimumValue, "numberValue": numberValue, "options": options, "selection": selection, "stepValue": stepValue, "title": title, "value": value]
   }
 
   private func toggle(_ id: String, _ title: String, _ description: String, _ value: Bool, disabled: Bool = false) -> [String: Any] {

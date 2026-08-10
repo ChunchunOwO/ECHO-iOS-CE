@@ -212,10 +212,8 @@ enum EchoNativePlaybackMode: String, Codable, Sendable {
 }
 
 struct EchoNativeCoreSettings: Codable, Sendable {
-  var appearanceBackground = "artwork"
-  var appearancePattern = "sakura"
+  var appearanceBackground = "theme"
   var artworkBackgroundEnabled = true
-  var artworkMotionEnabled = true
   var autoOpenLyricsForLocalTracks = true
   var autoQueueImportedLocalTracks = false
   var audioTagVisibility: [String: Bool] = [
@@ -229,7 +227,6 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     "streamable": true,
   ]
   var darkModeEnabled = false
-  var backgroundMotionEnabled = true
   var customFontName = ""
   var desktopLyricsAnimation = "flow"
   var desktopLyricsBackground = "theme"
@@ -260,7 +257,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var lrcApiExternalDataEnabled = false
   var lrclibExternalDataEnabled = true
   var loudnessEnabled = false
-  var motionStyle = "fluid"
+  var motionStyle = "subtle"
   var neteaseAccessMode = "direct"
   var neteaseApiBaseUrl = "https://music.163.com"
   var neteaseExternalDataEnabled = true
@@ -280,12 +277,9 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
-    let decodedBackground = try values.decodeIfPresent(String.self, forKey: .appearanceBackground) ?? "artwork"
-    appearanceBackground = ["artwork", "custom", "theme"].contains(decodedBackground) ? decodedBackground : "artwork"
-    let decodedPattern = try values.decodeIfPresent(String.self, forKey: .appearancePattern) ?? "sakura"
-    appearancePattern = ["none", "sakura", "waves", "dots"].contains(decodedPattern) ? decodedPattern : "sakura"
+    let decodedBackground = try values.decodeIfPresent(String.self, forKey: .appearanceBackground) ?? "theme"
+    appearanceBackground = ["artwork", "custom", "theme"].contains(decodedBackground) ? decodedBackground : "theme"
     artworkBackgroundEnabled = try values.decodeIfPresent(Bool.self, forKey: .artworkBackgroundEnabled) ?? true
-    artworkMotionEnabled = try values.decodeIfPresent(Bool.self, forKey: .artworkMotionEnabled) ?? true
     autoOpenLyricsForLocalTracks = try values.decodeIfPresent(Bool.self, forKey: .autoOpenLyricsForLocalTracks) ?? true
     autoQueueImportedLocalTracks = try values.decodeIfPresent(Bool.self, forKey: .autoQueueImportedLocalTracks) ?? false
     audioTagVisibility = try values.decodeIfPresent([String: Bool].self, forKey: .audioTagVisibility) ?? [
@@ -299,7 +293,6 @@ struct EchoNativeCoreSettings: Codable, Sendable {
       "streamable": true,
     ]
     darkModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .darkModeEnabled) ?? false
-    backgroundMotionEnabled = try values.decodeIfPresent(Bool.self, forKey: .backgroundMotionEnabled) ?? true
     customFontName = try values.decodeIfPresent(String.self, forKey: .customFontName) ?? ""
     desktopLyricsAnimation = try values.decodeIfPresent(String.self, forKey: .desktopLyricsAnimation) ?? "flow"
     desktopLyricsBackground = try values.decodeIfPresent(String.self, forKey: .desktopLyricsBackground) ?? "theme"
@@ -320,7 +313,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     let decodedVisualizer = try values.decodeIfPresent(String.self, forKey: .desktopLyricsVisualizer) ?? "off"
     desktopLyricsVisualizer = ["off", "bars", "wave", "pulse"].contains(decodedVisualizer) ? decodedVisualizer : "off"
     let decodedWidthScale = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsWidthScale)
-    desktopLyricsWidthScale = max(0.2, min(1.0, decodedHeightScale == nil ? 1.0 : decodedWidthScale ?? 1.0))
+    desktopLyricsWidthScale = max(0.2, min(1.0, decodedWidthScale ?? 1.0))
     defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "local"
     defaultLocalLibraryView = try values.decodeIfPresent(String.self, forKey: .defaultLocalLibraryView) ?? "songs"
     defaultPage = try values.decodeIfPresent(String.self, forKey: .defaultPage) ?? "control"
@@ -336,8 +329,8 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     lrcApiExternalDataEnabled = try values.decodeIfPresent(Bool.self, forKey: .lrcApiExternalDataEnabled) ?? false
     lrclibExternalDataEnabled = try values.decodeIfPresent(Bool.self, forKey: .lrclibExternalDataEnabled) ?? true
     loudnessEnabled = try values.decodeIfPresent(Bool.self, forKey: .loudnessEnabled) ?? false
-    let decodedMotionStyle = try values.decodeIfPresent(String.self, forKey: .motionStyle) ?? "fluid"
-    motionStyle = ["off", "subtle", "fluid"].contains(decodedMotionStyle) ? decodedMotionStyle : "fluid"
+    let decodedMotionStyle = try values.decodeIfPresent(String.self, forKey: .motionStyle) ?? "subtle"
+    motionStyle = ["off", "subtle", "fluid"].contains(decodedMotionStyle) ? decodedMotionStyle : "subtle"
     neteaseAccessMode = try values.decodeIfPresent(String.self, forKey: .neteaseAccessMode) ?? "direct"
     neteaseApiBaseUrl = try values.decodeIfPresent(String.self, forKey: .neteaseApiBaseUrl) ?? "https://music.163.com"
     neteaseExternalDataEnabled = try values.decodeIfPresent(Bool.self, forKey: .neteaseExternalDataEnabled) ?? true
