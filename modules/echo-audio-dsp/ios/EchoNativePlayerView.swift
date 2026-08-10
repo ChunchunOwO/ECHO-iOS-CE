@@ -480,7 +480,7 @@ private struct EchoNativeAppScreen: View {
 
   var body: some View {
     ZStack {
-      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
+      appBackground
       Group {
         #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
@@ -521,6 +521,37 @@ private struct EchoNativeAppScreen: View {
     }
   }
 
+  @ViewBuilder
+  private var appBackground: some View {
+    ZStack {
+      if playerModel.activePage == "control" || playerModel.appearanceBackground == "artwork" {
+        EchoNativeArtworkBackdrop(
+          enabled: true,
+          identity: "\(playerModel.title)::\(playerModel.artist)",
+          urlString: playerModel.artworkUrl
+        ) {
+          onAction(["action": "artworkError", "url": playerModel.artworkUrl])
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+      } else if playerModel.appearanceBackground == "custom" {
+        EchoNativeArtworkBackdrop(
+          enabled: true,
+          identity: playerModel.appearanceImageUrl,
+          urlString: playerModel.appearanceImageUrl,
+          onError: {}
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+      } else {
+        echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
+      }
+      EchoNativeSakuraBackdrop(color: echoColor(hex: playerModel.themeColorHex))
+        .ignoresSafeArea()
+    }
+    .allowsHitTesting(false)
+  }
+
   private var selection: Binding<String> {
     Binding(
       get: { playerModel.activePage },
@@ -537,7 +568,7 @@ private struct EchoNativeAppScreen: View {
   private var adaptiveTabView: some View {
     TabView(selection: selection) {
       Tab(title("control"), systemImage: "headphones", value: "control") {
-        themedTab(playerBackground: true) {
+        themedTab {
           EchoNativePlayerScreen(model: playerModel, onAction: onAction)
         }
       }
@@ -569,7 +600,7 @@ private struct EchoNativeAppScreen: View {
 
   private var legacyTabView: some View {
     TabView(selection: selection) {
-      themedTab(playerBackground: true) {
+      themedTab {
         EchoNativePlayerScreen(model: playerModel, onAction: onAction)
       }
         .tag("control")
@@ -599,49 +630,10 @@ private struct EchoNativeAppScreen: View {
   }
 
   private func themedTab<Content: View>(
-    playerBackground: Bool = false,
     @ViewBuilder content: () -> Content
   ) -> some View {
-    ZStack {
-      if playerBackground {
-        EchoNativeArtworkBackdrop(
-          enabled: true,
-          identity: "\(playerModel.title)::\(playerModel.artist)",
-          urlString: playerModel.artworkUrl
-        ) {
-          onAction(["action": "artworkError", "url": playerModel.artworkUrl])
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-      } else if playerModel.appearanceBackground == "artwork" {
-        EchoNativeArtworkBackdrop(
-          enabled: true,
-          identity: "\(playerModel.title)::\(playerModel.artist)",
-          urlString: playerModel.artworkUrl
-        ) {
-          onAction(["action": "artworkError", "url": playerModel.artworkUrl])
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-      } else if playerModel.appearanceBackground == "custom" {
-        EchoNativeArtworkBackdrop(
-          enabled: true,
-          identity: playerModel.appearanceImageUrl,
-          urlString: playerModel.appearanceImageUrl,
-          onError: {}
-        )
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-      } else {
-        echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
-      }
-      EchoNativeSakuraBackdrop(color: echoColor(hex: playerModel.themeColorHex))
-        .ignoresSafeArea()
-
-      content()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    content()
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   private func title(_ page: String) -> String {

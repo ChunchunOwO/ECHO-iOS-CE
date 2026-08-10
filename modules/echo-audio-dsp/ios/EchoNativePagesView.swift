@@ -2510,16 +2510,28 @@ struct EchoNativePagesScreen: View {
         settingHeader(row)
         HStack(spacing: 8) {
           ForEach(row.options) { option in
-            let selected = (currentSettingRow(row.id)?.selection ?? row.selection) == option.id
+            let currentColor = currentSettingRow(row.id)?.selection ?? row.selection ?? "AC1F24"
+            let selected = option.id == "default"
+              ? currentColor == "AC1F24"
+              : option.id == currentColor && currentColor != "AC1F24"
             Button {
-              updateSettingRow(row.id) { $0.selection = option.id }
-              onAction(["action": "settingSelect", "key": row.id, "selection": option.id])
+              let selection = option.id == "default" ? "AC1F24" : option.id
+              updateSettingRow(row.id) { $0.selection = selection }
+              onAction(["action": "settingSelect", "key": row.id, "selection": selection])
             } label: {
               Circle()
-                .fill(echoColor(hex: option.id))
+                .fill(echoColor(hex: option.id == "default" ? "AC1F24" : option.id))
                 .frame(width: 30, height: 30)
                 .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 1))
                 .overlay(Circle().stroke(echoInk.opacity(selected ? 0.42 : 0.16), lineWidth: 1))
+                .overlay {
+                  if option.id == "default" {
+                    Image(systemName: "arrow.counterclockwise")
+                      .font(echoFont(size: 11, weight: .bold))
+                      .foregroundColor(.white)
+                      .shadow(color: .black.opacity(0.25), radius: 2)
+                  }
+                }
                 .scaleEffect(selected ? 1 : 0.88)
             }
             .buttonStyle(.plain)

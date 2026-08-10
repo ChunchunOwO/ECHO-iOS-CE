@@ -693,7 +693,7 @@ extension EchoNativeAppStore {
       ]),
       action("appearanceImportBackground", localized("Import background image", "导入背景图片"), localized("Choose an image used by the imported-image background.", "选择用于软件背景的图片。")),
       color("themeColor", localized("Theme color", "主题色"), localized("Sets controls and the theme background color.", "设置控件与主题背景颜色。"), settings.themeColorHex, [
-        option("AC1F24", localized("Cherry", "樱桃红")), option("137C72", localized("Teal", "青绿")),
+        option("default", localized("Software default", "软件初始")), option("AC1F24", localized("Cherry", "樱桃红")), option("137C72", localized("Teal", "青绿")),
         option("2869A8", localized("Blue", "海蓝")), option("76509B", localized("Iris", "鸢尾紫")),
         option("C45F35", localized("Coral", "珊瑚橙")),
       ]),
