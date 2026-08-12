@@ -19,6 +19,9 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     var language = "zh"
     var onlyWhilePlaying = true
     var position = "bottom"
+    var progressBarEnabled = true
+    var progressColorHex = "E8EEF6"
+    var progressRainbow = false
     var rainbowGradient = false
     var showMetadata = true
     var themeColorHex = "69508F"
@@ -194,19 +197,15 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
 
   private var shouldPresent: Bool {
     configuration.enabled
-      && (!configuration.onlyWhilePlaying || isPlaying || !hasTrack)
+      && (!configuration.onlyWhilePlaying || isPlaying)
   }
 
-  private var needsContinuousRendering: Bool {
-    if !hasRenderedFrame || pictureInPictureController?.isPictureInPictureActive != true { return true }
-    let continuousEffect = isPlaying && (
-      configuration.timedReveal
-        || configuration.rainbowGradient
-        || configuration.visualizer != "off"
-        || currentLineStartMs < 0
-    )
-    let lyricTransition = configuration.transitionAnimation && CACurrentMediaTime() - lyricTransitionStartedAt < 0.35
-    return hasTrack && (continuousEffect || lyricTransition)
+  private var playbackEnded: Bool {
+    !isPlaying && durationMs > 0 && positionMs >= durationMs - 250
+  }
+
+  private var showsTrack: Bool {
+    hasTrack && !playbackEnded
   }
 
   private func refreshPresentation() {
@@ -214,7 +213,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       stopPresentation()
       return
     }
-    startRenderTimer(interval: needsContinuousRendering ? 1.0 / 30.0 : 0.5)
+    startRenderTimer(interval: 1.0 / 30.0)
     renderFrame()
     startIfNeeded()
   }
@@ -228,9 +227,9 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       pictureInPictureController?.stopPictureInPicture()
     } else {
       startRequested = false
+      displayLayer.flushAndRemoveImage()
+      hasRenderedFrame = false
     }
-    displayLayer.flushAndRemoveImage()
-    hasRenderedFrame = false
   }
 
   private func startIfNeeded() {
@@ -329,7 +328,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     else { return nil }
 
     var timing = CMSampleTimingInfo(
-      duration: CMTime(seconds: max(1.0 / 30.0, renderTimerInterval * 2), preferredTimescale: 600),
+      duration: CMTime(seconds: 1.0 / 30.0, preferredTimescale: 600),
       presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
       decodeTimeStamp: .invalid
     )
@@ -384,7 +383,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     let bounds = CGRect(x: 0, y: 0, width: width, height: height)
     let transitionProgress = min(1, max(0, (CACurrentMediaTime() - lyricTransitionStartedAt) / 0.28))
     drawBackground(in: context, bounds: bounds)
-    guard hasTrack else {
+    guard showsTrack else {
       drawEmptyState(in: context, bounds: bounds)
       return
     }
@@ -487,6 +486,32 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     }
     context.restoreGState()
     context.restoreGState()
+    drawProgressBar(in: context, bounds: bounds)
+  }
+
+  private func drawProgressBar(in context: CGContext, bounds: CGRect) {
+    guard configuration.progressBarEnabled, durationMs > 0 else { return }
+    let height = max(2, min(3, bounds.height * 0.006))
+    let progress = CGFloat(max(0, min(1, interpolatedPositionMs / durationMs)))
+    let track = CGRect(x: bounds.minX, y: bounds.maxY - height, width: bounds.width, height: height)
+    let fill = CGRect(x: track.minX, y: track.minY, width: track.width * progress, height: track.height)
+    context.setFillColor(UIColor.white.withAlphaComponent(0.18).cgColor)
+    context.fill(track)
+    guard fill.width > 0 else { return }
+    if configuration.progressRainbow,
+      let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: (0...8).map { rainbowColor(position: CGFloat($0) / 8, phase: rainbowPhase, alpha: 0.9).cgColor } as CFArray,
+        locations: (0...8).map { CGFloat($0) / 8 }
+      ) {
+      context.saveGState()
+      context.clip(to: fill)
+      context.drawLinearGradient(gradient, start: CGPoint(x: track.minX, y: track.midY), end: CGPoint(x: track.maxX, y: track.midY), options: [])
+      context.restoreGState()
+    } else {
+      context.setFillColor(progressUIColor.cgColor)
+      context.fill(fill)
+    }
   }
 
   private func drawCover(in rect: CGRect, context: CGContext) {
@@ -593,7 +618,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
   }
 
   private func drawBackground(in context: CGContext, bounds: CGRect) {
-    if !hasTrack {
+    if !showsTrack {
       drawThemeBackground(in: context, bounds: bounds)
       drawSakuraScattering(in: context, bounds: bounds)
       return
@@ -642,6 +667,16 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
       green: CGFloat((value >> 8) & 0xFF) / 255,
       blue: CGFloat(value & 0xFF) / 255,
       alpha: 1
+    )
+  }
+
+  private var progressUIColor: UIColor {
+    let value = UInt64(configuration.progressColorHex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) ?? 0xE8EEF6
+    return UIColor(
+      red: CGFloat((value >> 16) & 0xFF) / 255,
+      green: CGFloat((value >> 8) & 0xFF) / 255,
+      blue: CGFloat(value & 0xFF) / 255,
+      alpha: 0.9
     )
   }
 
@@ -762,8 +797,11 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     guard currentLineStartMs >= 0 else { return 1 }
     let end = nextLineStartMs > currentLineStartMs ? nextLineStartMs : durationMs
     guard end > currentLineStartMs else { return 1 }
-    let interpolatedPosition = min(durationMs, positionMs + (isPlaying ? (CACurrentMediaTime() - positionUpdatedAt) * 1000 : 0))
-    return max(0, min(1, (interpolatedPosition - currentLineStartMs) / (end - currentLineStartMs)))
+    return max(0, min(1, (interpolatedPositionMs - currentLineStartMs) / (end - currentLineStartMs)))
+  }
+
+  private var interpolatedPositionMs: Double {
+    min(durationMs, positionMs + (isPlaying ? (CACurrentMediaTime() - positionUpdatedAt) * 1000 : 0))
   }
 
   private var lyricScrollProgress: Double {
@@ -934,7 +972,7 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     startRequested = false
     programmaticStopPending = false
     userDismissed = false
-    if !hasTrack {
+    if !showsTrack {
       hasRenderedFrame = false
       renderFrame()
     }

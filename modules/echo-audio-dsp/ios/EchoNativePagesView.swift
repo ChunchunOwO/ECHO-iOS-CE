@@ -382,6 +382,7 @@ struct EchoNativePagesScreen: View {
   @State private var appearanceBackgroundItem: PhotosPickerItem?
   @State private var showAppearanceFontImporter = false
   @State private var desktopLyricsBackgroundImportFailed = false
+  @State private var librarySourceExpanded = false
   @State private var selectedAlbumId = ""
   @State private var selectedAlbumArtworkUrl = ""
   @State private var selectedAlbumTitle = ""
@@ -716,11 +717,7 @@ struct EchoNativePagesScreen: View {
         LazyVStack(alignment: .leading, spacing: 14) {
         Color.clear.frame(height: 0).id(scrollTopId)
         if !searchOnly {
-          EchoNativeSegmentedControl(
-            options: library.sourceOptions,
-            selection: library.source,
-            onSelect: { onAction(["action": "librarySource", "selection": $0]) }
-          )
+          librarySourceControl(library)
         }
 
         if !searchOnly && library.source == "streaming" {
@@ -1221,6 +1218,41 @@ struct EchoNativePagesScreen: View {
 
   private func libraryIndexKey(_ title: String) -> String {
     EchoNativeLibraryIndex.key(for: title)
+  }
+
+  @ViewBuilder
+  private func librarySourceControl(_ library: EchoNativeLibraryPayload) -> some View {
+    if librarySourceExpanded || library.source != "all" {
+      HStack(spacing: 8) {
+        Button {
+          librarySourceExpanded = false
+          clearAlbumSelection()
+          onAction(["action": "librarySource", "selection": "all"])
+        } label: {
+          Image(systemName: "chevron.left")
+            .font(echoFont(size: 14, weight: .bold))
+            .frame(width: 44, height: 44)
+            .echoGlass(tint: Color.white.opacity(0.1), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(model.payload?.language == "en" ? "Back to source selection" : "返回来源选择")
+
+        EchoNativeSegmentedControl(
+          options: library.sourceOptions.filter { $0.id == library.source },
+          selection: library.source,
+          onSelect: { _ in }
+        )
+      }
+    } else {
+      EchoNativeSegmentedControl(
+        options: library.sourceOptions,
+        selection: library.source,
+        onSelect: { selection in
+          librarySourceExpanded = true
+          onAction(["action": "librarySource", "selection": selection])
+        }
+      )
+    }
   }
 
   private func libraryIndexAnchor(forKey key: String, scope: String, page: Int) -> String {
@@ -2511,17 +2543,17 @@ struct EchoNativePagesScreen: View {
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 8) {
             ForEach(row.options) { option in
-              let currentColor = currentSettingRow(row.id)?.selection ?? row.selection ?? "69508F"
+              let currentColor = currentSettingRow(row.id)?.selection ?? row.selection ?? defaultColor(for: row.id)
               let selected = option.id == "default"
-                ? currentColor == "69508F"
-                : option.id == currentColor && currentColor != "69508F"
+                ? currentColor == defaultColor(for: row.id)
+                : option.id == currentColor && currentColor != defaultColor(for: row.id)
               Button {
-                let selection = option.id == "default" ? "69508F" : option.id
+                let selection = option.id == "default" ? defaultColor(for: row.id) : option.id
                 updateSettingRow(row.id) { $0.selection = selection }
                 onAction(["action": "settingSelect", "key": row.id, "selection": selection])
               } label: {
                 Circle()
-                  .fill(echoColor(hex: option.id == "default" ? "69508F" : option.id))
+                  .fill(echoColor(hex: option.id == "default" ? defaultColor(for: row.id) : option.id))
                   .frame(width: 30, height: 30)
                   .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 1))
                   .overlay(Circle().stroke(echoInk.opacity(selected ? 0.42 : 0.16), lineWidth: 1))
@@ -2542,7 +2574,7 @@ struct EchoNativePagesScreen: View {
             ColorPicker(
               "",
               selection: Binding(
-                get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? "69508F") },
+                get: { echoColor(hex: currentSettingRow(row.id)?.selection ?? row.selection ?? defaultColor(for: row.id)) },
                 set: { color in
                   guard let selection = echoHex(color: color) else { return }
                   updateSettingRow(row.id) { $0.selection = selection }
@@ -2560,6 +2592,8 @@ struct EchoNativePagesScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .padding(.vertical, 12)
+      .disabled(row.disabled)
+      .opacity(row.disabled ? 0.42 : 1)
     case "font":
       HStack(spacing: 12) {
         settingHeader(row)
@@ -2653,6 +2687,10 @@ struct EchoNativePagesScreen: View {
     id == "desktopLyricsWidth" || id == "desktopLyricsHeight" || id == "fontScale"
       ? "\(Int((value * 100).rounded()))%"
       : "\(Int(value.rounded())) pt"
+  }
+
+  private func defaultColor(for id: String) -> String {
+    id == "desktopLyricsProgressColor" ? "E8EEF6" : "69508F"
   }
 
   private func desktopLyricsBackgroundData(_ image: UIImage) -> Data? {
@@ -3007,7 +3045,7 @@ private struct EchoPairingScannerSheet: View {
             .font(echoFont(size: 30, weight: .medium))
           Text(language == "en" ? "Camera access is required" : "需要相机权限")
             .font(echoFont(size: 20, weight: .bold))
-          Text(language == "en" ? "Enable Camera for ECHO iPhone in Settings, then scan again." : "请在系统设置中允许 ECHO iPhone 使用相机，然后重新扫码。")
+          Text(language == "en" ? "Enable Camera for ECHO Player in Settings, then scan again." : "请在系统设置中允许 ECHO Player 使用相机，然后重新扫码。")
             .font(echoFont(size: 12, weight: .medium))
             .foregroundColor(.white.opacity(0.68))
             .multilineTextAlignment(.center)

@@ -17,7 +17,7 @@
   <key>CFBundleVersion</key>
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>CFBundleDisplayName</key>
-  <string>ECHO</string>
+  <string>ECHO Player</string>
   <key>NSExtension</key>
   <dict>
     <key>NSExtensionPointIdentifier</key>

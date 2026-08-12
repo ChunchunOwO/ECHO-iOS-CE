@@ -490,7 +490,7 @@ private struct EchoNativeAppScreen: View {
 
   var body: some View {
     ZStack {
-      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
+      appBackground
       Group {
         #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
@@ -535,6 +535,7 @@ private struct EchoNativeAppScreen: View {
   private var appBackground: some View {
     ZStack {
       if (playerModel.activePage == "control" || playerModel.appearanceBackground == "artwork")
+        && playerModel.artworkBackgroundEnabled
         && !playerModel.artworkUrl.isEmpty {
         EchoNativeArtworkBackdrop(
           enabled: true,
@@ -649,11 +650,8 @@ private struct EchoNativeAppScreen: View {
   private func themedTab<Content: View>(
     @ViewBuilder content: () -> Content
   ) -> some View {
-    ZStack {
-      appBackground
-      content()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+    content()
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 

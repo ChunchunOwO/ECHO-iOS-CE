@@ -1963,6 +1963,8 @@ final class EchoNativeAppStore {
     case "autoLyrics": persistent.settings.autoOpenLyricsForLocalTracks = enabled
     case "desktopLyricsEnabled": persistent.settings.desktopLyricsEnabled = enabled; playerModel.desktopLyricsEnabled = enabled
     case "desktopLyricsOnlyWhilePlaying": persistent.settings.desktopLyricsOnlyWhilePlaying = enabled
+    case "desktopLyricsProgressBarEnabled": persistent.settings.desktopLyricsProgressBarEnabled = enabled
+    case "desktopLyricsProgressRainbow": persistent.settings.desktopLyricsProgressRainbow = enabled
     case "desktopLyricsShowMetadata": persistent.settings.desktopLyricsShowMetadata = enabled
     case "desktopLyricsRainbowGradient": persistent.settings.desktopLyricsRainbowGradient = enabled
     case "desktopLyricsTransitionAnimation": persistent.settings.desktopLyricsTransitionAnimation = enabled
@@ -2020,6 +2022,7 @@ final class EchoNativeAppStore {
     case "appearanceBackground": persistent.settings.appearanceBackground = selection
     case "motionStyle": persistent.settings.motionStyle = selection
     case "themeColor": persistent.settings.themeColorHex = selection
+    case "desktopLyricsProgressColor": persistent.settings.desktopLyricsProgressColorHex = selection
     case "defaultLibrarySource": persistent.settings.defaultLibrarySource = selection; librarySource = selection; resetLibraryPosition()
     case "defaultLocalView":
       persistent.settings.defaultLocalLibraryView = selection
@@ -2093,6 +2096,9 @@ final class EchoNativeAppStore {
       persistent.settings.desktopLyricsHeightScale = defaults.desktopLyricsHeightScale
       persistent.settings.desktopLyricsOnlyWhilePlaying = defaults.desktopLyricsOnlyWhilePlaying
       persistent.settings.desktopLyricsPosition = defaults.desktopLyricsPosition
+      persistent.settings.desktopLyricsProgressBarEnabled = defaults.desktopLyricsProgressBarEnabled
+      persistent.settings.desktopLyricsProgressColorHex = defaults.desktopLyricsProgressColorHex
+      persistent.settings.desktopLyricsProgressRainbow = defaults.desktopLyricsProgressRainbow
       persistent.settings.desktopLyricsRainbowGradient = defaults.desktopLyricsRainbowGradient
       persistent.settings.desktopLyricsShowMetadata = defaults.desktopLyricsShowMetadata
       persistent.settings.desktopLyricsSize = defaults.desktopLyricsSize
@@ -3070,6 +3076,9 @@ final class EchoNativeAppStore {
       language: settings.language,
       onlyWhilePlaying: settings.desktopLyricsOnlyWhilePlaying,
       position: settings.desktopLyricsPosition,
+      progressBarEnabled: settings.desktopLyricsProgressBarEnabled,
+      progressColorHex: settings.desktopLyricsProgressColorHex,
+      progressRainbow: settings.desktopLyricsProgressRainbow,
       rainbowGradient: settings.desktopLyricsRainbowGradient,
       showMetadata: settings.desktopLyricsShowMetadata,
       themeColorHex: settings.themeColorHex,

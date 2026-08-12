@@ -235,6 +235,9 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var desktopLyricsHeightScale = 0.36
   var desktopLyricsOnlyWhilePlaying = true
   var desktopLyricsPosition = "bottom"
+  var desktopLyricsProgressBarEnabled = true
+  var desktopLyricsProgressColorHex = "E8EEF6"
+  var desktopLyricsProgressRainbow = false
   var desktopLyricsRainbowGradient = false
   var desktopLyricsShowMetadata = true
   var desktopLyricsSize = "medium"
@@ -242,7 +245,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
   var desktopLyricsTransitionAnimation = true
   var desktopLyricsVisualizer = "off"
   var desktopLyricsWidthScale = 1.0
-  var defaultLibrarySource = "local"
+  var defaultLibrarySource = "all"
   var defaultLocalLibraryView = "songs"
   var defaultPage = "control"
   var eqGains = Array(repeating: 0.0, count: 10)
@@ -301,6 +304,9 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     desktopLyricsHeightScale = max(0.33, min(1.0, decodedHeightScale ?? 0.36))
     desktopLyricsOnlyWhilePlaying = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsOnlyWhilePlaying) ?? true
     desktopLyricsPosition = try values.decodeIfPresent(String.self, forKey: .desktopLyricsPosition) ?? "bottom"
+    desktopLyricsProgressBarEnabled = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsProgressBarEnabled) ?? true
+    desktopLyricsProgressColorHex = try values.decodeIfPresent(String.self, forKey: .desktopLyricsProgressColorHex) ?? "E8EEF6"
+    desktopLyricsProgressRainbow = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsProgressRainbow) ?? false
     desktopLyricsRainbowGradient = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsRainbowGradient) ?? false
     desktopLyricsShowMetadata = try values.decodeIfPresent(Bool.self, forKey: .desktopLyricsShowMetadata) ?? true
     desktopLyricsSize = try values.decodeIfPresent(String.self, forKey: .desktopLyricsSize) ?? "medium"
@@ -314,7 +320,7 @@ struct EchoNativeCoreSettings: Codable, Sendable {
     desktopLyricsVisualizer = ["off", "bars", "wave", "pulse"].contains(decodedVisualizer) ? decodedVisualizer : "off"
     let decodedWidthScale = try values.decodeIfPresent(Double.self, forKey: .desktopLyricsWidthScale)
     desktopLyricsWidthScale = max(0.2, min(1.0, decodedWidthScale ?? 1.0))
-    defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "local"
+    defaultLibrarySource = try values.decodeIfPresent(String.self, forKey: .defaultLibrarySource) ?? "all"
     defaultLocalLibraryView = try values.decodeIfPresent(String.self, forKey: .defaultLocalLibraryView) ?? "songs"
     defaultPage = try values.decodeIfPresent(String.self, forKey: .defaultPage) ?? "control"
     eqGains = try values.decodeIfPresent([Double].self, forKey: .eqGains) ?? Array(repeating: 0, count: 10)

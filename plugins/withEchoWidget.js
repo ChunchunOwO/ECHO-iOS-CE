@@ -37,7 +37,7 @@ module.exports = (config) => {
       settings.CODE_SIGN_ENTITLEMENTS = '"EchoWidget/EchoWidget.entitlements"';
       settings.CURRENT_PROJECT_VERSION = '1';
       settings.IPHONEOS_DEPLOYMENT_TARGET = '15.1';
-      settings.MARKETING_VERSION = '0.5.0';
+      settings.MARKETING_VERSION = '1.5.1';
       settings.SWIFT_VERSION = '5.0';
       settings.TARGETED_DEVICE_FAMILY = '"1,2"';
     }

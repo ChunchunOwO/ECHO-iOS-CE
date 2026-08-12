@@ -3,8 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('the app boots the native core and keeps playback mutations ordered', async () => {
-  const [app, engine, store, payload, coreTypes, metadata, pages, player, desktopLyrics, remoteClients, neteaseLogin, localLibrary, widget, widgetPlugin, splash] = await Promise.all([
+  const [app, config, engine, store, payload, coreTypes, metadata, pages, player, desktopLyrics, remoteClients, neteaseLogin, localLibrary, widget, widgetPlugin, splash] = await Promise.all([
     readFile(new URL('../../App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../app.json', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoAudioDspModule.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeAppStore.swift', import.meta.url), 'utf8'),
     readFile(new URL('../../modules/echo-audio-dsp/ios/EchoNativeAppStorePayload.swift', import.meta.url), 'utf8'),
@@ -64,6 +65,9 @@ test('the app boots the native core and keeps playback mutations ordered', async
   const albumArtwork = store.slice(albumArtworkStart, normalizedMetadataStart);
 
   assert.match(nativeEntry, /<EchoNativeAppView/u);
+  assert.match(config, /"name": "ECHO Player"/u);
+  assert.match(config, /"version": "1\.5\.1"/u);
+  assert.match(config, /"buildNumber": "1"/u);
   assert.doesNotMatch(nativeEntry, /migrationPayload === null/u);
   assert.match(appEntry, /<NativeEchoApp \/>/u);
   assert.doesNotMatch(appEntry, /<EchoLinkApp/u);
@@ -210,10 +214,10 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /canvasWidth\(for: configuration\.widthScale\)/u);
   assert.match(desktopLyrics, /canvasHeight\(for: configuration\.heightScale\)/u);
   assert.match(desktopLyrics, /CIFilter\.gaussianBlur\(\)/u);
-  assert.match(desktopLyrics, /startRenderTimer\(interval: needsContinuousRendering \? 1\.0 \/ 30\.0 : 0\.5\)/u);
+  assert.match(desktopLyrics, /startRenderTimer\(interval: 1\.0 \/ 30\.0\)/u);
   assert.match(desktopLyrics, /Timer\(timeInterval: interval/u);
   assert.match(desktopLyrics, /RunLoop\.main\.add\(timer, forMode: \.common\)/u);
-  assert.match(desktopLyrics, /renderTimerInterval \* 2/u);
+  assert.match(desktopLyrics, /duration: CMTime\(seconds: 1\.0 \/ 30\.0/u);
   assert.match(desktopLyrics, /configuration\.visualizer != "off"/u);
   assert.doesNotMatch(desktopLyrics, /withTimeInterval: 0\.5/u);
   assert.match(desktopLyrics, /preferredTimescale: 600/u);
@@ -236,7 +240,7 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(desktopLyrics, /for character in text/u);
   assert.match(desktopLyrics, /saturation: 0\.38/u);
   assert.match(desktopLyrics, /restoreRequested = true/u);
-  assert.match(desktopLyrics, /if !hasTrack \{[\s\S]*hasRenderedFrame = false[\s\S]*renderFrame\(\)/u);
+  assert.match(desktopLyrics, /if !showsTrack \{[\s\S]*hasRenderedFrame = false[\s\S]*renderFrame\(\)/u);
   assert.match(desktopLyrics, /context\.setFillColor\(base\.cgColor\)/u);
   assert.match(desktopLyrics, /self\.trackKey != trackKey/u);
   assert.match(desktopLyrics, /max\(8, inset - 8\)/u);
@@ -247,6 +251,10 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(desktopLyrics, /private var visualizationLevel/u);
   assert.match(desktopLyrics, /private static let artworkCache/u);
   assert.match(desktopLyrics, /没有歌曲正在播放/u);
+  assert.match(desktopLyrics, /configuration\.enabled[\s\S]*!configuration\.onlyWhilePlaying \|\| isPlaying/u);
+  assert.match(desktopLyrics, /private var playbackEnded/u);
+  assert.match(desktopLyrics, /private func drawProgressBar/u);
+  assert.match(desktopLyrics, /configuration\.progressRainbow/u);
   assert.match(desktopLyrics, /themeColorHex/u);
   assert.match(player, /private var appBackground: some View/u);
   assert.match(payload, /Software default/u);
@@ -310,8 +318,10 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.doesNotMatch(player, /@Published var lyricTexts:/u);
   assert.doesNotMatch(player, /model\.repeatOne/u);
   assert.doesNotMatch(themedTab, /EchoNativeArtworkBackdrop\(/u);
-  assert.match(themedTab, /appBackground/u);
+  assert.doesNotMatch(themedTab, /appBackground/u);
+  assert.match(player, /ZStack \{\s+appBackground/u);
   assert.match(appBackground, /activePage == "control" \|\| playerModel\.appearanceBackground == "artwork"/u);
+  assert.match(appBackground, /playerModel\.artworkBackgroundEnabled/u);
   assert.ok(appBackground.indexOf('echoThemeBackground') > appBackground.indexOf('EchoNativeArtworkBackdrop'));
   assert.match(appBackground, /activePage != "control"[\s\S]*appearanceBackground == "custom"[\s\S]*appearanceImageUrl\.isEmpty/u);
   assert.match(player, /ZStack \{\s+echoWarmBackground\s+if !stableUrl\.isEmpty/u);
@@ -330,6 +340,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(pages, /DispatchQueue\.main\.async \{ scrollToLibraryIndex\(target, proxy: proxy\) \}/u);
   assert.equal((pages.match(/proxy\.scrollTo\(scrollTopId, anchor: \.top\)/gu) ?? []).length, 3);
   assert.match(pages, /private var librarySortMenu: some View/u);
+  assert.match(pages, /private func librarySourceControl/u);
+  assert.match(pages, /"action": "librarySource", "selection": "all"/u);
   assert.match(pages, /@AppStorage\("echo\.library\.trackSort"\) private var libraryTrackSort = "default"/u);
   assert.match(pages, /"Default order" : "默认排序"[\s\S]*\.tag\("default"\)/u);
   assert.match(pages, /let sortingCollections = model\.payload\?\.library\?\.collections\.isEmpty == false/u);
@@ -367,6 +379,11 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(payload, /let appearanceSection = section\("appearance"/u);
   assert.match(payload, /let motionSection = section\("motion"/u);
   assert.match(coreTypes, /var appearanceBackground = "theme"/u);
+  assert.match(coreTypes, /var defaultLibrarySource = "all"/u);
+  assert.match(coreTypes, /var desktopLyricsProgressBarEnabled = true/u);
+  assert.match(payload, /toggle\("desktopLyricsProgressBarEnabled"/u);
+  assert.match(payload, /toggle\("desktopLyricsProgressRainbow"/u);
+  assert.match(payload, /color\("desktopLyricsProgressColor"/u);
   assert.match(coreTypes, /desktopLyricsWidthScale = max\(0\.2, min\(1\.0, decodedWidthScale \?\? 1\.0\)\)/u);
   assert.doesNotMatch(coreTypes, /appearancePattern|backgroundMotionEnabled|artworkMotionEnabled/u);
   assert.doesNotMatch(payload, /appearancePattern|backgroundMotion|toggle\("artworkMotion"/u);
@@ -386,6 +403,8 @@ test('the app boots the native core and keeps playback mutations ordered', async
   assert.match(widget, /supportedFamilies\(\[\.systemSmall, \.systemMedium\]\)/u);
   assert.match(widgetPlugin, /addTarget\(targetName, 'app_extension'/u);
   assert.match(widgetPlugin, /'PBXSourcesBuildPhase', 'Sources', target\.uuid/u);
+  assert.match(widgetPlugin, /CURRENT_PROJECT_VERSION = '1'/u);
+  assert.match(widgetPlugin, /MARKETING_VERSION = '1\.5\.1'/u);
   assert.match(player, /EchoNativeSplashView\(/u);
   assert.match(player, /Task\.sleep\(nanoseconds: 2_000_000_000\)/u);
   assert.match(splash, /EchoSplashSakuraField\(count: 100/u);

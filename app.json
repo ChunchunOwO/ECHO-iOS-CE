@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "ECHO iPhone",
+    "name": "ECHO Player",
     "slug": "echo-ios",
     "scheme": "echo",
-    "version": "0.5.0",
+    "version": "1.5.1",
     "icon": "./docs/app-icon.png",
     "platforms": [
       "ios"
@@ -11,6 +11,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "buildNumber": "1",
       "bundleIdentifier": "app.echo.next.ios",
       "supportsTablet": true,
       "entitlements": {
@@ -22,9 +23,9 @@
         "UIBackgroundModes": [
           "audio"
         ],
-        "NSCameraUsageDescription": "ECHO iPhone uses the camera to scan ECHO pairing QR codes.",
-        "NSPhotoLibraryAddUsageDescription": "ECHO iPhone saves a NetEase sign-in QR code so it can be selected in the NetEase scanner.",
-        "NSLocalNetworkUsageDescription": "ECHO iPhone connects to ECHO NEXT on your local network for playback control and library browsing.",
+        "NSCameraUsageDescription": "ECHO Player uses the camera to scan ECHO pairing QR codes.",
+        "NSPhotoLibraryAddUsageDescription": "ECHO Player saves a NetEase sign-in QR code so it can be selected in the NetEase scanner.",
+        "NSLocalNetworkUsageDescription": "ECHO Player connects to ECHO NEXT on your local network for playback control and library browsing.",
         "NSBonjourServices": [
           "_echo-link._tcp"
         ],

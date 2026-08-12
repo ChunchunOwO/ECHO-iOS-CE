@@ -77,7 +77,7 @@ function NativeEchoApp(): ReactElement {
             },
             confirmBeforeDeletingLocalTracks: settings.confirmBeforeDeletingLocalTracks ?? true,
             darkModeEnabled: settings.darkModeEnabled ?? false,
-            defaultLibrarySource: settings.defaultLibrarySource ?? 'local',
+            defaultLibrarySource: settings.defaultLibrarySource ?? 'all',
             defaultLocalLibraryView: settings.defaultLocalLibraryView ?? 'songs',
             defaultPage: settings.defaultPage ?? 'control',
             eqGains: settings.eqGains ?? Array(10).fill(0),

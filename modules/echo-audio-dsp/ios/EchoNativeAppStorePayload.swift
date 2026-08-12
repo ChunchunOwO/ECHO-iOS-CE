@@ -712,6 +712,13 @@ extension EchoNativeAppStore {
     let desktopLyricsSection = section("desktopLyrics", localized("Desktop lyrics", "桌面歌词"), localized("Native Picture in Picture lyrics with artwork and line transitions.", "带封面与逐句动效的原生画中画歌词。"), "quote.bubble.fill", [
       toggle("desktopLyricsEnabled", localized("Enable desktop lyrics", "启用桌面歌词"), localized("Show lyrics in a floating Picture in Picture window over other apps.", "通过悬浮的画中画窗口在其他应用上方显示歌词。"), settings.desktopLyricsEnabled),
       toggle("desktopLyricsOnlyWhilePlaying", localized("Only while playing", "仅播放时显示"), localized("Hide desktop lyrics when playback is paused.", "暂停播放时隐藏桌面歌词。"), settings.desktopLyricsOnlyWhilePlaying, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsProgressBarEnabled", localized("Bottom progress bar", "底部进度条"), localized("Show a thin playback progress line along the bottom edge.", "在桌面歌词最底部显示一条细播放进度线。"), settings.desktopLyricsProgressBarEnabled, disabled: !settings.desktopLyricsEnabled),
+      toggle("desktopLyricsProgressRainbow", localized("Color progress mode", "彩色进度模式"), localized("Animate the progress line through multiple colors.", "让进度条以多种颜色动态显示。"), settings.desktopLyricsProgressRainbow, disabled: !settings.desktopLyricsEnabled || !settings.desktopLyricsProgressBarEnabled),
+      color("desktopLyricsProgressColor", localized("Progress color", "进度条颜色"), localized("Choose the light solid color used when color mode is off.", "选择关闭彩色模式时使用的浅色进度条颜色。"), settings.desktopLyricsProgressColorHex, [
+        option("default", localized("Soft white", "浅白")), option("DCEBFF", localized("Ice blue", "冰蓝")),
+        option("DDF5E7", localized("Mint", "薄荷")), option("FFE5EC", localized("Blush", "浅粉")),
+        option("FFF2C9", localized("Warm light", "浅金")),
+      ], disabled: !settings.desktopLyricsEnabled || !settings.desktopLyricsProgressBarEnabled || settings.desktopLyricsProgressRainbow),
       toggle("desktopLyricsShowMetadata", localized("Show track details", "显示歌曲信息"), localized("Include title and artist above the lyric.", "在歌词上方显示标题和艺术家。"), settings.desktopLyricsShowMetadata, disabled: !settings.desktopLyricsEnabled),
       picker("desktopLyricsBackground", localized("Background", "背景"), localized("Use the ECHO theme, the current artwork with blur, or an imported image.", "使用 ECHO 主题色、模糊歌曲封面或导入图片。"), settings.desktopLyricsBackground, [
         option("theme", localized("Theme", "主题色")), option("artwork", localized("Artwork glass", "封面玻璃")), option("custom", localized("Imported image", "导入图片")),
@@ -829,8 +836,8 @@ extension EchoNativeAppStore {
     row(id, title, description, kind: "picker", options: options, selection: selection, disabled: disabled)
   }
 
-  private func color(_ id: String, _ title: String, _ description: String, _ selection: String, _ options: [[String: Any]]) -> [String: Any] {
-    row(id, title, description, kind: "color", options: options, selection: selection)
+  private func color(_ id: String, _ title: String, _ description: String, _ selection: String, _ options: [[String: Any]], disabled: Bool = false) -> [String: Any] {
+    row(id, title, description, kind: "color", options: options, selection: selection, disabled: disabled)
   }
 
   private func font(_ id: String, _ title: String, _ description: String, _ value: String) -> [String: Any] {
