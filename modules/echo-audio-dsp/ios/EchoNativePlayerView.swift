@@ -483,14 +483,10 @@ private struct EchoNativeAppScreen: View {
   @ObservedObject var pagesModel: EchoNativePagesModel
   let onAction: ([String: Any]) -> Void
   @State private var showingSplash = true
-  @State private var stableArtworkIdentity = ""
-  @State private var stableArtworkUrl = ""
-  @State private var stableCustomIdentity = ""
-  @State private var stableCustomUrl = ""
 
   var body: some View {
     ZStack {
-      appBackground
+      echoThemeBackground(playerModel.themeColorHex).ignoresSafeArea()
       Group {
         #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
@@ -532,31 +528,27 @@ private struct EchoNativeAppScreen: View {
   }
 
   @ViewBuilder
-  private var appBackground: some View {
+  private func appBackground(for page: String) -> some View {
     ZStack {
-      if (playerModel.activePage == "control" || playerModel.appearanceBackground == "artwork")
+      if (page == "control" || playerModel.appearanceBackground == "artwork")
         && playerModel.artworkBackgroundEnabled
         && !playerModel.artworkUrl.isEmpty {
         EchoNativeArtworkBackdrop(
           enabled: true,
           identity: "\(playerModel.title)::\(playerModel.artist)",
-          urlString: playerModel.artworkUrl,
-          stableIdentity: $stableArtworkIdentity,
-          stableUrl: $stableArtworkUrl
+          urlString: playerModel.artworkUrl
         ) {
           onAction(["action": "artworkError", "url": playerModel.artworkUrl])
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
-      } else if playerModel.activePage != "control"
+      } else if page != "control"
         && playerModel.appearanceBackground == "custom"
         && !playerModel.appearanceImageUrl.isEmpty {
         EchoNativeArtworkBackdrop(
           enabled: true,
           identity: playerModel.appearanceImageUrl,
           urlString: playerModel.appearanceImageUrl,
-          stableIdentity: $stableCustomIdentity,
-          stableUrl: $stableCustomUrl,
           onError: {}
         )
         .ignoresSafeArea()
@@ -586,27 +578,27 @@ private struct EchoNativeAppScreen: View {
   private var adaptiveTabView: some View {
     TabView(selection: selection) {
       Tab(title("control"), systemImage: "headphones", value: "control") {
-        themedTab {
+        themedTab(page: "control") {
           EchoNativePlayerScreen(model: playerModel, onAction: onAction)
         }
       }
       Tab(title("library"), systemImage: "music.note.list", value: "library") {
-        themedTab {
+        themedTab(page: "library") {
           EchoNativePagesScreen(model: pagesModel, page: "library", onAction: onAction)
         }
       }
       Tab(title("search"), systemImage: "magnifyingglass", value: "search", role: .search) {
-        themedTab {
+        themedTab(page: "search") {
           EchoNativePagesScreen(model: pagesModel, page: "search", onAction: onAction)
         }
       }
       Tab(title("connect"), systemImage: "link", value: "connect") {
-        themedTab {
+        themedTab(page: "connect") {
           EchoNativePagesScreen(model: pagesModel, page: "connect", onAction: onAction)
         }
       }
       Tab(title("settings"), systemImage: "gearshape", value: "settings") {
-        themedTab {
+        themedTab(page: "settings") {
           EchoNativePagesScreen(model: pagesModel, page: "settings", onAction: onAction)
         }
       }
@@ -618,27 +610,27 @@ private struct EchoNativeAppScreen: View {
 
   private var legacyTabView: some View {
     TabView(selection: selection) {
-      themedTab {
+      themedTab(page: "control") {
         EchoNativePlayerScreen(model: playerModel, onAction: onAction)
       }
         .tag("control")
         .tabItem { Label(title("control"), systemImage: "headphones") }
-      themedTab {
+      themedTab(page: "library") {
         EchoNativePagesScreen(model: pagesModel, page: "library", onAction: onAction)
       }
         .tag("library")
         .tabItem { Label(title("library"), systemImage: "music.note.list") }
-      themedTab {
+      themedTab(page: "search") {
         EchoNativePagesScreen(model: pagesModel, page: "search", onAction: onAction)
       }
         .tag("search")
         .tabItem { Label(title("search"), systemImage: "magnifyingglass") }
-      themedTab {
+      themedTab(page: "connect") {
         EchoNativePagesScreen(model: pagesModel, page: "connect", onAction: onAction)
       }
         .tag("connect")
         .tabItem { Label(title("connect"), systemImage: "link") }
-      themedTab {
+      themedTab(page: "settings") {
         EchoNativePagesScreen(model: pagesModel, page: "settings", onAction: onAction)
       }
         .tag("settings")
@@ -648,10 +640,14 @@ private struct EchoNativeAppScreen: View {
   }
 
   private func themedTab<Content: View>(
+    page: String,
     @ViewBuilder content: () -> Content
   ) -> some View {
-    content()
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    ZStack {
+      appBackground(for: page)
+      content()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
@@ -1494,11 +1490,11 @@ private struct EchoNativeArtworkBackdrop: View {
   let enabled: Bool
   let identity: String
   let urlString: String
-  @Binding var stableIdentity: String
-  @Binding var stableUrl: String
   let onError: () -> Void
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.colorScheme) private var colorScheme
+  @State private var stableIdentity = ""
+  @State private var stableUrl = ""
 
   var body: some View {
     GeometryReader { geometry in

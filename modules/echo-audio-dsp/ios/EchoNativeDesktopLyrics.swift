@@ -568,14 +568,39 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     context.saveGState()
     context.translateBy(x: 0, y: bounds.height)
     context.scaleBy(x: 1, y: -1)
-    let font = displayFont(size: min(30, max(20, bounds.height * 0.12)), weight: .bold)
-    drawCenteredText(
-      configuration.language == "en" ? "No song is playing" : "没有歌曲正在播放",
-      in: bounds.insetBy(dx: max(24, bounds.width * 0.08), dy: 0),
-      font: font,
-      color: .white.withAlphaComponent(0.9),
-      context: context
+    let text = configuration.language == "en" ? "No song\nis playing" : "没有歌曲正在播放"
+    let inset = max(18, bounds.width * 0.055)
+    let iconSize = min(76, max(42, bounds.height * 0.25))
+    let gap = max(12, bounds.width * 0.025)
+    let textWidth = max(72, bounds.width - inset * 2 - iconSize - gap)
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.alignment = .left
+    paragraph.lineBreakMode = .byWordWrapping
+    let font = displayFont(size: min(52, max(30, bounds.height * 0.17)), weight: .bold)
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: font,
+      .foregroundColor: UIColor.white.withAlphaComponent(0.94),
+      .paragraphStyle: paragraph,
+    ]
+    let measured = (text as NSString).boundingRect(
+      with: CGSize(width: textWidth, height: bounds.height),
+      options: [.usesLineFragmentOrigin, .usesFontLeading],
+      attributes: attributes,
+      context: nil
     )
+    let contentHeight = max(iconSize, measured.height)
+    let originY = bounds.midY - contentHeight / 2
+    let iconRect = CGRect(x: inset, y: bounds.midY - iconSize / 2, width: iconSize, height: iconSize)
+    let textRect = CGRect(x: iconRect.maxX + gap, y: originY, width: textWidth, height: contentHeight)
+    UIGraphicsPushContext(context)
+    if let icon = UIImage(
+      systemName: "music.note",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: iconSize * 0.72, weight: .semibold)
+    )?.withTintColor(.white.withAlphaComponent(0.9), renderingMode: .alwaysOriginal) {
+      icon.draw(in: iconRect)
+    }
+    (text as NSString).draw(in: textRect, withAttributes: attributes)
+    UIGraphicsPopContext()
     context.restoreGState()
   }
 
@@ -684,9 +709,16 @@ final class EchoNativeDesktopLyricsController: NSObject, @preconcurrency AVPictu
     let points: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
       (0.12, 0.18, 0.7, 0.8), (0.28, 0.76, -0.4, 0.62), (0.48, 0.23, 0.2, 0.48),
       (0.68, 0.72, -0.7, 0.7), (0.86, 0.2, 0.45, 0.56), (0.9, 0.84, -0.2, 0.42),
+      (0.04, 0.52, 0.3, 0.44), (0.58, 0.94, -0.5, 0.54), (0.76, 0.42, 0.8, 0.38),
     ]
+    let time = CACurrentMediaTime()
     let petalColor = themeUIColor.withAlphaComponent(0.36)
-    for (x, y, angle, scale) in points {
+    for (index, point) in points.enumerated() {
+      let speed = 0.025 + Double(index % 4) * 0.007
+      let y = CGFloat((Double(point.1) + time * speed).truncatingRemainder(dividingBy: 1.18)) - 0.09
+      let x = point.0 + CGFloat(sin(time * (0.45 + Double(index) * 0.025) + Double(index))) * 0.07
+      let angle = point.2 + CGFloat(time * (0.12 + Double(index % 3) * 0.035))
+      let scale = point.3
       let radius = max(8, min(bounds.width, bounds.height) * 0.045 * scale)
       context.saveGState()
       context.translateBy(x: bounds.width * x, y: bounds.height * y)
